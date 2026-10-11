@@ -18,6 +18,7 @@ struct HostsView: View {
     @StateObject private var discovery = KodiDiscovery()
     @State private var isAdding = false
     @State private var editingHost: Host?
+    @State private var checkingHost: Host?
 
     var body: some View {
         NavigationStack {
@@ -31,6 +32,7 @@ struct HostsView: View {
                                     Text("\(host.address):\(host.port)")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                    HostCheckRow(status: HostCheckStatus(summary: host.lastCheck))
                                 }
                             }
                             .swipeActions(edge: .leading) {
@@ -40,6 +42,14 @@ struct HostsView: View {
                                     Label("Edit", systemImage: "pencil")
                                 }
                                 .tint(.blue)
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button {
+                                    checkingHost = host
+                                } label: {
+                                    Label("Check", systemImage: "stethoscope")
+                                }
+                                .tint(.green)
                             }
                         }
                         .onDelete { store.remove(at: $0) }
@@ -90,8 +100,54 @@ struct HostsView: View {
                     store.setPassword(password, for: updated)
                 }
             }
+            .sheet(item: $checkingHost) { host in
+                DiagnosticsView(
+                    host: host,
+                    context: DiagnosticsContext.kodi(
+                        KodiClient(host: host,
+                                   username: host.username,
+                                   password: store.password(for: host))
+                    )
+                ) { report in
+                    store.recordCheck(for: host, summary: HostCheckStatus.summary(for: report))
+                }
+            }
             .task { discovery.start() }
             .onDisappear { discovery.stop() }
+        }
+    }
+}
+
+/// The persisted last-check line shown under a host row: "Not checked" on a
+/// host with no recorded run, otherwise the outcome and its timestamp.
+struct HostCheckRow: View {
+    let status: HostCheckStatus
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: symbol)
+            Text(status.label)
+            if let detail = status.rowDetail {
+                Text("· \(detail)")
+            }
+        }
+        .font(.caption2)
+        .foregroundStyle(tint)
+    }
+
+    private var symbol: String {
+        switch status.state {
+        case .neverChecked: return "circle.dashed"
+        case .reachable: return "checkmark.circle.fill"
+        case .failed: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch status.state {
+        case .neverChecked: return .secondary
+        case .reachable: return .green
+        case .failed: return .orange
         }
     }
 }
