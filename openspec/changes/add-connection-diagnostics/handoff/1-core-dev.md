@@ -106,3 +106,22 @@ func probeNotificationChannel(timeout: TimeInterval) async throws -> String
 
 ## defaultProbes() order (id / method / dependsOn / timeout)
 1 `reachability` / nil / nil / 4 · 2 `credentials` / `Application.GetProperties` / reachability / 8 · 3 `library` / `VideoLibrary.GetMovies` / credentials / 8 · 4 `artwork` / nil / library / 8 · 5 `notifications` / nil / credentials / 3 · 6 `compatibility` / `JSONRPC.Version` / credentials / 8
+
+---
+
+# Implementation status (tasks 1.1, 1.2, 2.1–2.5, 4.1) — COMPILER-UNVERIFIED
+
+- **state:** implemented; committed `e4e8cf0`; **NOT verified — Swift cannot be built locally**. Completeness is proven only by a CI run (see below). No task checkboxes flipped.
+- **files:** `YatseRemote/Core/Diagnostics.swift` (new), `YatseRemoteTests/DiagnosticsTests.swift` (new), `YatseRemote/Core/KodiClient.swift` (additions + `call` refactored through `rawCall`).
+- **commands run:** `git commit -q -m "diagnostics: sequential runner, probes (1.2/2.1-2.5/4.1) and unit tests"` → `e4e8cf0`.
+- **helper additions beyond the frozen surface (internal, additive, no signature changed):** `Diagnostics.message(for:)`, `Diagnostics.compatibilityOutcome(_:)`, `Diagnostics.artworkURL(_:)`, `Diagnostics.requestDescription(for:)` (private), `struct RPCVersion`.
+
+## What CI must prove (do not treat as green before then)
+1. `build-ipa.yml` compiles the Diagnostics + KodiClient changes (Swift 5 mode, iOS 17, minimal concurrency).
+2. `tests.yml` `xcodebuild test -only-testing:YatseRemoteTests` passes `DiagnosticsTests` (and existing `KodiModelTests`).
+3. Test names that must pass: `testEveryDeclaredProbeMethodIsAllowlisted`, `testRunnerRefusesToIssueMethodOutsideAllowlist`, `testAllProbesPass`, `testAFailedProbeSkipsItsDependents`, `testUnreachableMarksEverythingDownstreamNotRun`, `testAProbeThatExceedsItsTimeoutFails`, `testReachabilityTreatsHTTP401AsReachable`, `testReachabilityCarriesTransportDetailVerbatim`, `testReachabilityTimeoutIsAFailure`, `testCredentialsProbeReportsServerIdentity`, `testCredentialsFailureNamesHTTPStatusAndRemediation`, `testLibraryProbeReportsTotalFromLiveMovies`, `testCompatibilityProbeReportsJSONRPCVersion`, `testArtworkWithNoArtworkIsNotRun`, `testArtworkResolvesPosterFromPlayingItem`, `testNotificationFrameIsAPass`, `testNotificationSilentSocketIsAPassWithDetail`, `testNotificationSocketErrorFails`, `testReportIsBuiltFromTheFixedFields`, `testReportNeverContainsTheHostPassword`.
+
+## Known risks not observable by CI
+- `JSONRPC.Version` response shape is decoded leniently (nested `version` or flat); only a live Kodi run confirms the string.
+- The WebSocket probe treats a silent socket as a pass; an unroutable host that never errors within 3 s would pass, but reachability/credentials gate it first.
+- The rendered sheet is out of my scope (ui-dev).
