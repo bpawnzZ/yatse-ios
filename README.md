@@ -22,7 +22,7 @@ See [`docs/CLEANROOM.md`](docs/CLEANROOM.md) for what was and was not taken.
 | Hosts | add / edit / delete, Basic auth, password in Keychain, HTTP or HTTPS, Wake-on-LAN (MAC + port) |
 | Discovery | Bonjour `_xbmc-jsonrpc-h._tcp` / `_xbmc-jsonrpc._tcp` |
 | Now playing | poster, title, show/artist line, live progress, seek |
-| Transport | play/pause, stop, previous, next, shuffle, repeat, subtitle track, audio track |
+| Transport | stop / play-pause / next on the persistent mini-player; subtitles, fullscreen, info, keyboard and queue tiles on the remote (previous, shuffle, repeat and audio-stream return with the Now Playing page) |
 | Shell | host-centric: slide-out drawer (Home, Movies, TV Shows, Music, Pvr, Files, Addons, Remote, then Settings and About) with a host header and switcher, and a persistent mini-player while a player is active |
 | Remote | one screen (no tabs): app bar with host name and power/cast/remote, a shortcut strip, volume and utility tile rows, an accent d-pad with an outlined select, a bare Back control, touchpad mode, keyboard text entry; the current item's artwork as a blurred background with translucent tiles while playing |
 | Queue | current playlist, jump to entry, remove entry, clear |

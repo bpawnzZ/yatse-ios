@@ -12,19 +12,14 @@ final class Session: ObservableObject {
     @Published private(set) var model: AppModel?
     private(set) var password = ""
 
-    var isActive: Bool { model != nil }
-
-    /// Makes `host` the active host and connects. Re-activating the same host
-    /// is a no-op, so selecting the current host in the drawer does not bounce
-    /// the connection.
+    /// Activates `host`. Re-selecting the current host while connected is a
+    /// no-op; re-selecting it after a failed connection retries.
     func activate(host: Host, password: String) {
-        if self.host?.id == host.id, model != nil { return }
-        model?.disconnect()
-        self.host = host
-        self.password = password
-        let model = AppModel(host: host, password: password)
-        self.model = model
-        Task { await model.connect() }
+        if let current = self.host, current.connectionKey == host.connectionKey,
+           let model, model.status.isConnected {
+            return
+        }
+        start(host: host, password: password)
     }
 
     func deactivate() {
@@ -34,11 +29,30 @@ final class Session: ObservableObject {
         password = ""
     }
 
-    /// Drops the session when the active host is no longer saved, so deleting a
-    /// host returns the app to the picker instead of leaving a shell pointed at
-    /// something that no longer exists.
-    func reconcile(with hosts: [Host]) {
-        guard let host, !hosts.contains(where: { $0.id == host.id }) else { return }
-        deactivate()
+    /// Keeps the session consistent with the saved hosts: returns to the picker
+    /// when the active host is deleted, reconnects when its connection details
+    /// change, and otherwise just refreshes the stored copy (a rename or a new
+    /// self-check result) without bouncing the connection.
+    func reconcile(with hosts: [Host], password: (Host) -> String) {
+        guard let current = host else { return }
+        guard let updated = hosts.first(where: { $0.id == current.id }) else {
+            deactivate()
+            return
+        }
+        if updated.connectionKey != current.connectionKey {
+            start(host: updated, password: password(updated))
+        } else {
+            self.host = updated
+            self.password = password(updated)
+        }
+    }
+
+    private func start(host: Host, password: String) {
+        model?.disconnect()
+        self.host = host
+        self.password = password
+        let model = AppModel(host: host, password: password)
+        self.model = model
+        Task { await model.connect() }
     }
 }

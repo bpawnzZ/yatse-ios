@@ -18,7 +18,7 @@ struct RootView: View {
             }
         }
         .onChange(of: store.hosts) { _, hosts in
-            session.reconcile(with: hosts)
+            session.reconcile(with: hosts) { store.password(for: $0) }
         }
     }
 }

@@ -15,6 +15,29 @@ struct RemoteScreen: View {
     @State private var showingKeyboard = false
     @State private var showingCastNotice = false
     @State private var touchpadEnabled = false
+    @State private var pendingPower: PowerAction?
+
+    private enum PowerAction: String, Identifiable {
+        case suspend, reboot, shutdown
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .suspend: return "Suspend"
+            case .reboot: return "Reboot"
+            case .shutdown: return "Shut down"
+            }
+        }
+
+        var method: String {
+            switch self {
+            case .suspend: return "System.Suspend"
+            case .reboot: return "System.Reboot"
+            case .shutdown: return "System.Shutdown"
+            }
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -64,6 +87,21 @@ struct RemoteScreen: View {
         } message: {
             Text("Casting to another device is not available in this build.")
         }
+        .confirmationDialog(
+            "Host power",
+            isPresented: Binding(
+                get: { pendingPower != nil },
+                set: { if !$0 { pendingPower = nil } }
+            ),
+            presenting: pendingPower
+        ) { action in
+            Button(action.title, role: .destructive) {
+                Task { await model.send(action.method) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { action in
+            Text("\(action.title) the media centre?")
+        }
     }
 
     // MARK: App bar
@@ -75,13 +113,13 @@ struct RemoteScreen: View {
                     Label("Wake", systemImage: "power")
                 }
             }
-            Button { Task { await model.send("System.Suspend") } } label: {
+            Button { pendingPower = .suspend } label: {
                 Label("Suspend", systemImage: "moon")
             }
-            Button { Task { await model.send("System.Reboot") } } label: {
+            Button { pendingPower = .reboot } label: {
                 Label("Reboot", systemImage: "arrow.clockwise")
             }
-            Button(role: .destructive) { Task { await model.send("System.Shutdown") } } label: {
+            Button { pendingPower = .shutdown } label: {
                 Label("Shut down", systemImage: "power")
             }
         } label: {

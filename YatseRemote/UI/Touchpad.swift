@@ -9,6 +9,10 @@ enum TouchKey: String {
 /// can be unit-tested without a host: the dominant axis wins, and a movement
 /// below the threshold — a tap — is left to the caller's tap handler.
 enum TouchpadGestureResolver {
+    /// Drag distance below which a gesture is a tap. Shared with the surface so
+    /// the two cannot disagree and leave a dead zone.
+    static let threshold: CGFloat = 24
+
     static func key(forTranslation translation: CGSize, threshold: CGFloat = 24) -> TouchKey? {
         let dx = translation.width
         let dy = translation.height
@@ -36,7 +40,7 @@ struct TouchpadSurface: View {
             )
             .contentShape(RoundedRectangle(cornerRadius: 16))
             .gesture(
-                DragGesture(minimumDistance: 20)
+                DragGesture(minimumDistance: TouchpadGestureResolver.threshold)
                     .onEnded { value in
                         guard let key = TouchpadGestureResolver.key(forTranslation: value.translation) else { return }
                         Task { await model.key(key.rawValue) }

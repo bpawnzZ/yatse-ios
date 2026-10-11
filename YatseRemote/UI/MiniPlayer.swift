@@ -14,14 +14,14 @@ struct MiniPlayer: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ArtworkImage(
-                url: Artwork.poster(for: model.item?.art ?? [:], thumbnail: model.item?.thumbnail ?? ""),
-                username: model.host.username,
-                password: model.password,
-                size: 40
-            )
-
             HStack(spacing: 12) {
+                ArtworkImage(
+                    url: Artwork.poster(for: model.item?.art ?? [:], thumbnail: model.item?.thumbnail ?? ""),
+                    username: model.host.username,
+                    password: model.password,
+                    size: 40
+                )
+
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(.subheadline)
