@@ -36,10 +36,15 @@ struct ArtworkImage: View {
             image = nil
             return
         }
-        if let cached = ArtworkCache.shared.image(for: url) {
-            image = cached
-            return
-        }
+        image = await ArtworkLoader.load(url, username: username, password: password)
+    }
+}
+
+/// Shared authenticated artwork fetch, used by the row image and the remote's
+/// blurred background so both ride the same cache and the same Basic-auth path.
+enum ArtworkLoader {
+    static func load(_ url: URL, username: String, password: String) async -> UIImage? {
+        if let cached = ArtworkCache.shared.image(for: url) { return cached }
 
         var request = URLRequest(url: url)
         if !username.isEmpty || !password.isEmpty {
@@ -50,10 +55,43 @@ struct ArtworkImage: View {
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let http = response as? HTTPURLResponse,
               (200..<300).contains(http.statusCode),
-              let loaded = UIImage(data: data) else { return }
+              let image = UIImage(data: data) else { return nil }
 
-        ArtworkCache.shared.store(loaded, for: url)
-        image = loaded
+        ArtworkCache.shared.store(image, for: url)
+        return image
+    }
+}
+
+/// Full-bleed blurred artwork behind the remote while something is playing.
+struct ArtworkBackground: View {
+    let url: URL?
+    let username: String
+    let password: String
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        GeometryReader { geo in
+            Group {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+            .blur(radius: 30)
+            .overlay(Color.black.opacity(0.5))
+            .ignoresSafeArea()
+        }
+        .task(id: url) {
+            guard let url else {
+                image = nil
+                return
+            }
+            image = await ArtworkLoader.load(url, username: username, password: password)
+        }
     }
 }
 

@@ -51,6 +51,13 @@ struct Host: Codable, Identifiable, Hashable {
     }
 
     var isUsable: Bool { !address.isEmpty && (1...65535).contains(port) }
+
+    /// The fields that determine how the client connects. `lastCheck` and `name`
+    /// are deliberately excluded: `lastCheck` changes on every diagnostic and a
+    /// rename must not force a reconnect.
+    var connectionKey: String {
+        "\(address)|\(port)|\(username)|\(useTLS)"
+    }
 }
 
 // MARK: - Wake-on-LAN

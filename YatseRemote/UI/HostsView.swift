@@ -3,45 +3,47 @@ import SwiftUI
 @main
 struct YatseRemoteApp: App {
     @StateObject private var store = HostStore()
+    @StateObject private var session = Session()
 
     var body: some Scene {
         WindowGroup {
-            HostsView()
+            RootView()
                 .environmentObject(store)
+                .environmentObject(session)
                 .preferredColorScheme(.dark)
         }
     }
 }
 
+/// How the host list behaves: the picker connects to a host; the manager (used
+/// under Settings) only edits hosts.
+enum HostsMode { case connect, manage }
+
+/// The host picker (first run, or after disconnect) and the host manager. It
+/// owns no navigation stack — the root or the shell supplies one.
 struct HostsView: View {
+    var mode: HostsMode = .connect
+
     @EnvironmentObject private var store: HostStore
+    @EnvironmentObject private var session: Session
     @StateObject private var discovery = KodiDiscovery()
     @State private var isAdding = false
     @State private var editingHost: Host?
     @State private var checkingHost: Host?
 
     var body: some View {
-        NavigationStack {
-            List {
-                if !store.hosts.isEmpty {
-                    Section("Saved hosts") {
-                        ForEach(store.hosts) { host in
-                            NavigationLink(value: host) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(host.displayName).font(.headline)
-                                    Text("\(host.address):\(host.port)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    HostCheckRow(status: HostCheckStatus(summary: host.lastCheck))
-                                }
-                            }
+        List {
+            if !store.hosts.isEmpty {
+                Section("Saved hosts") {
+                    ForEach(store.hosts) { host in
+                        row(for: host)
                             .swipeActions(edge: .leading) {
                                 Button {
                                     editingHost = host
                                 } label: {
                                     Label("Edit", systemImage: "pencil")
                                 }
-                                .tint(.blue)
+                                .tint(Color.accentColor)
                             }
                             .swipeActions(edge: .trailing) {
                                 Button {
@@ -51,70 +53,104 @@ struct HostsView: View {
                                 }
                                 .tint(.green)
                             }
-                        }
-                        .onDelete { store.remove(at: $0) }
                     }
+                    .onDelete { store.remove(at: $0) }
                 }
+            } else if mode == .connect {
+                Section {
+                    Text("No hosts yet. Add one, or pick a discovered server below.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
-                Section("Discovered on this network") {
-                    if discovery.results.isEmpty {
-                        Text(discovery.isSearching ? "Searching…" : "Nothing advertised found.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    ForEach(discovery.results) { found in
-                        Button {
-                            store.upsert(found.host)
-                        } label: {
-                            Label(found.name.isEmpty ? found.address : found.name,
-                                  systemImage: "plus.circle")
-                        }
-                    }
+            Section("Discovered on this network") {
+                if discovery.results.isEmpty {
+                    Text(discovery.isSearching ? "Searching…" : "Nothing advertised found.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-            }
-            .navigationTitle("Yatse Remote")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button { isAdding = true } label: { Image(systemName: "plus") }
-                }
-                ToolbarItem(placement: .navigationBarLeading) {
+                ForEach(discovery.results) { found in
                     Button {
-                        discovery.isSearching ? discovery.stop() : discovery.start()
+                        store.upsert(found.host)
                     } label: {
-                        Image(systemName: "wifi")
+                        Label(found.name.isEmpty ? found.address : found.name,
+                              systemImage: "plus.circle")
                     }
                 }
             }
-            .navigationDestination(for: Host.self) { host in
-                RemoteView(host: host, password: store.password(for: host))
-            }
-            .sheet(isPresented: $isAdding) {
-                HostEditor(host: nil) { host, password in
-                    store.upsert(host)
-                    store.setPassword(password, for: host)
-                }
-            }
-            .sheet(item: $editingHost) { host in
-                HostEditor(host: host, password: store.password(for: host)) { updated, password in
-                    store.upsert(updated)
-                    store.setPassword(password, for: updated)
-                }
-            }
-            .sheet(item: $checkingHost) { host in
-                DiagnosticsView(
-                    host: host,
-                    context: DiagnosticsContext.kodi(
-                        KodiClient(host: host,
-                                   username: host.username,
-                                   password: store.password(for: host))
-                    )
-                ) { report in
-                    store.recordCheck(for: host, summary: HostCheckStatus.summary(for: report))
-                }
-            }
-            .task { discovery.start() }
-            .onDisappear { discovery.stop() }
         }
+        .navigationTitle(mode == .connect ? "Yatse Remote" : "Hosts")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { isAdding = true } label: { Image(systemName: "plus") }
+            }
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    discovery.isSearching ? discovery.stop() : discovery.start()
+                } label: {
+                    Image(systemName: "wifi")
+                }
+            }
+        }
+        .sheet(isPresented: $isAdding) {
+            HostEditor(host: nil) { host, password in
+                store.upsert(host)
+                store.setPassword(password, for: host)
+            }
+        }
+        .sheet(item: $editingHost) { host in
+            HostEditor(host: host, password: store.password(for: host)) { updated, password in
+                store.upsert(updated)
+                store.setPassword(password, for: updated)
+            }
+        }
+        .sheet(item: $checkingHost) { host in
+            DiagnosticsView(
+                host: host,
+                context: DiagnosticsContext.kodi(
+                    KodiClient(host: host,
+                               username: host.username,
+                               password: store.password(for: host))
+                )
+            ) { report in
+                store.recordCheck(for: host, summary: HostCheckStatus.summary(for: report))
+            }
+        }
+        .task { discovery.start() }
+        .onDisappear { discovery.stop() }
+    }
+
+    @ViewBuilder
+    private func row(for host: Host) -> some View {
+        if mode == .connect {
+            Button {
+                session.activate(host: host, password: store.password(for: host))
+            } label: {
+                HostRow(host: host)
+            }
+            .buttonStyle(.plain)
+        } else {
+            HostRow(host: host)
+                .contentShape(Rectangle())
+                .onTapGesture { editingHost = host }
+        }
+    }
+}
+
+/// One saved host: name, address, and the last self-check line.
+struct HostRow: View {
+    let host: Host
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(host.displayName).font(.headline)
+            Text("\(host.address):\(host.port)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HostCheckRow(status: HostCheckStatus(summary: host.lastCheck))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

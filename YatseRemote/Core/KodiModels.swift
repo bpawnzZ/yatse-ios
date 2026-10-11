@@ -40,6 +40,16 @@ struct RPCEnvelope<T: Decodable>: Decodable {
     let error: RPCError?
 }
 
+/// A JSON-RPC result the caller does not read. Kodi answers some methods with
+/// `"OK"` and others with a boolean (`GUI.SetFullscreen`), so a command path that
+/// decodes into a concrete type throws `malformedResponse` on the methods whose
+/// result shape differs. Decoding into this accepts any payload while still
+/// surfacing a JSON-RPC error object.
+struct IgnoreResult: Decodable {
+    init() {}
+    init(from decoder: Decoder) throws {}
+}
+
 // MARK: - Player
 
 struct ActivePlayer: Decodable, Identifiable, Hashable {

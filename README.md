@@ -22,12 +22,33 @@ See [`docs/CLEANROOM.md`](docs/CLEANROOM.md) for what was and was not taken.
 | Hosts | add / edit / delete, Basic auth, password in Keychain, HTTP or HTTPS, Wake-on-LAN (MAC + port) |
 | Discovery | Bonjour `_xbmc-jsonrpc-h._tcp` / `_xbmc-jsonrpc._tcp` |
 | Now playing | poster, title, show/artist line, live progress, seek |
-| Transport | play/pause, stop, previous, next, shuffle, repeat, subtitle track, audio track |
-| Remote | D-pad + select, back, home, info, context menu, OSD, keyboard text entry, volume, mute |
+| Transport | stop / play-pause / next on the persistent mini-player; subtitles, fullscreen, info, keyboard and queue tiles on the remote (previous, shuffle, repeat and audio-stream return with the Now Playing page) |
+| Shell | host-centric: slide-out drawer (Home, Movies, TV Shows, Music, Pvr, Files, Addons, Remote, then Settings and About) with a host header and switcher, and a persistent mini-player while a player is active |
+| Remote | one screen (no tabs): app bar with host name and power/cast/remote, a shortcut strip, volume and utility tile rows, an accent d-pad with an outlined select, a bare Back control, touchpad mode, keyboard text entry; the current item's artwork as a blurred background with translucent tiles while playing |
 | Queue | current playlist, jump to entry, remove entry, clear |
 | Library | Movies, TV Shows → Episodes, Artists → Albums, paged at 60 rows, tap to play |
 | Status | connection state, server name + version, in-app error surface |
 | Self-check | ordered, read-only, per-layer connection diagnostic with a copyable redacted report and persisted per-host status |
+
+## App shell
+
+The app is host-centric. Before a host is chosen it shows the host picker; once
+one is active the root becomes a shell scoped to that host, and player state is
+owned by an app-level `Session` (not by a screen), so playback and the live event
+stream survive moving between destinations.
+
+- **Drawer** — a slide-over list with a host header (name, switcher, keyboard /
+  mic / search actions) and the destinations above. Selecting the current host
+  again is a no-op; deleting the active host returns the app to the picker.
+- **Mini-player** — pinned above every destination while a player is active, with
+  a thumbnail, the title, and stop / play-pause / next. Tapping its title opens
+  the Remote.
+- **Remote** — a single screen with no tabs: the app bar, the shortcut strip
+  (Home, Movies, TV Shows, Music, Pictures), volume and utility tiles, the d-pad,
+  a bare Back arrow, and a touchpad toggle. While something plays, the item's
+  artwork is the blurred background and the tiles turn translucent.
+- **Not implemented** — Pvr, Files and Addons show a placeholder naming the
+  destination rather than a dead end.
 
 ## Connection self-check
 

@@ -145,7 +145,7 @@ final class AppModel: ObservableObject {
     @MainActor
     func send(_ method: String, _ params: [String: Any] = [:]) async {
         do {
-            _ = try await client.call(method, params: params, as: String.self)
+            _ = try await client.call(method, params: params, as: IgnoreResult.self)
             lastError = nil
             await refresh(light: true)
         } catch {
@@ -187,9 +187,27 @@ final class AppModel: ObservableObject {
 
     @MainActor
     func setVolume(_ value: Int) async {
-        let clamped = min(max(value, 0), 100)
+        let clamped = Self.clampedVolume(value)
         volume = clamped
         await send("Application.SetVolume", ["volume": clamped])
+    }
+
+    @MainActor
+    func stepVolume(by delta: Int) async {
+        await setVolume(volume + delta)
+    }
+
+    @MainActor
+    func toggleFullscreen() async {
+        await send("GUI.SetFullscreen", ["fullscreen": "toggle"])
+    }
+
+    /// Volume change per press of the remote's volume tiles.
+    static let volumeStep = 5
+
+    /// Clamp a volume to Kodi's 0–100 range. Pure so it is unit-testable.
+    static func clampedVolume(_ value: Int) -> Int {
+        min(max(value, 0), 100)
     }
 
     @MainActor
