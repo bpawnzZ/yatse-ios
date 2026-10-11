@@ -10,7 +10,6 @@ struct RemoteScreen: View {
     let onOpenDrawer: () -> Void
     let onSelect: (ShellDestination) -> Void
 
-    @State private var showingQueue = false
     @State private var showingKeyboard = false
     @State private var showingCastNotice = false
     @State private var touchpadEnabled = false
@@ -78,7 +77,6 @@ struct RemoteScreen: View {
                     .accessibilityLabel("Remote")
             }
         }
-        .sheet(isPresented: $showingQueue) { QueueSheet(model: model) }
         .sheet(isPresented: $showingKeyboard) { TextEntrySheet(model: model) }
         .alert("Casting", isPresented: $showingCastNotice) {
             Button("OK", role: .cancel) {}
@@ -177,11 +175,11 @@ struct RemoteScreen: View {
 
     private var utilityRow: some View {
         HStack(spacing: 10) {
-            tile("captions.bubble") { await model.cycleSubtitle() }
+            tile("arrow.backward") { await model.key("back") }
             tile("arrow.up.left.and.arrow.down.right") { await model.toggleFullscreen() }
             tile("info.circle") { await model.key("info") }
             tile("keyboard") { showingKeyboard = true }
-            tile("list.bullet") { showingQueue = true }
+            tile("list.bullet") { await model.key("contextmenu") }
         }
     }
 
