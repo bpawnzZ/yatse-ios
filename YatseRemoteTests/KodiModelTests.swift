@@ -291,7 +291,7 @@ final class KodiModelTests: XCTestCase {
         // Only addonid is guaranteed; a missing name falls back to the id and a
         // missing type to a readable heading.
         let payload = try result(ListPayload.self, from:
-            #"{"jsonrpc":"2.0","id":1,"result":{"addons":[{"addonid":"x.y.z"}],"limits":{"total":1}}}"#)
+            #"{"jsonrpc":"2.0","id":1,"result":{"addons":[{"addonid":"x.y.z"}],"limits":{"start":0,"end":1,"total":1}}}"#)
         let addon = try XCTUnwrap(payload.addons?.first)
         XCTAssertEqual(addon.displayName, "x.y.z")
         XCTAssertEqual(addon.typeLabel, "Other")
