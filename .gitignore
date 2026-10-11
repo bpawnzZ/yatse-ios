@@ -8,3 +8,7 @@ build/
 xcuserdata/
 *.xcuserstate
 .DS_Store
+
+# OpenSpec Hermes skills generated into the repo by `openspec init`
+# (the same skills are already installed globally in ~/.hermes/skills)
+.hermes/
