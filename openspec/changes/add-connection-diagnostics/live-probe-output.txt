@@ -1,0 +1,13 @@
+host: http://10.13.13.7:8080 (credentials supplied via environment, not printed)
+
+[PASS   ] reachability: host answered HTTP 401 (reachable, auth required)
+[PASS   ] credentials/identity: JSONRPC.Ping ok; server Kodi v21.3
+[PASS   ] library read permission: VideoLibrary.GetMovies ok (1 item(s) in page)
+[PASS   ] artwork fetch: GET /image/ -> HTTP 200, unknown type, 64+ bytes
+[PASS   ] notification channel: WebSocket 101 on port 9090; no frame within 3s (silent socket)
+[PASS   ] server compatibility: reported Kodi 21.3 (Kodi)
+
+6/6 probes passed
+server: Kodi v21.3
+
+RESULT: PASS

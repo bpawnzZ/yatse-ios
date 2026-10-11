@@ -43,6 +43,28 @@ It is read-only by design (no `Input.ExecuteAction`, no playlist mutation) so it
 is safe to run against the live box. It talks to Kodi at `10.13.13.7:8080` with
 Basic auth; credentials are in the script.
 
+## Host connection check (development host)
+
+`scripts/check-host.py` runs the same ordered, read-only probe sequence the app
+implements — reachability → credentials/identity → library read → artwork →
+notification channel → server compatibility — one layer per probe, against a
+live Kodi.
+
+```bash
+export KODI_HOST=http://10.13.13.7:8080   # host[:port] only; no credentials here
+export KODI_USER=kodi                      # from ~/reverseEngineer/yatse/probe_jsonrpc.py
+export KODI_PASS=...
+python3 scripts/check-host.py              # exit 0 = all probes passed; non-zero on failure
+```
+
+- Credentials are **environment-only** (`KODI_HOST`, `KODI_USER`, `KODI_PASS`):
+  no default, no placeholder, never committed. Missing any → exit 2 with a clear
+  message.
+- Read-only: the method set is frozen and the script refuses anything outside it
+  (`Input.*`, playlist mutation, settings writes, volume/mute are absent).
+- Last recorded live run output:
+  `openspec/changes/add-connection-diagnostics/live-probe-output.txt`.
+
 ## Traps that already cost time
 
 - **`runner.temp` is not a valid context at workflow level.** Putting
@@ -69,6 +91,19 @@ Basic auth; credentials are in the script.
 - **SSDP discovery is impossible for a free-signed build** — iOS gates
   `239.255.255.250:1900` behind `com.apple.developer.networking.multicast`.
   Bonjour is used instead, which needs no entitlement.
+- **WebSocket JSON-RPC is not on the HTTP port on this box.** An HTTP `Upgrade`
+  request to `:8080/jsonrpc` returns **HTTP 200**; only `:9090/jsonrpc` returns
+  **HTTP 101** (confirmed with `curl -u` against Kodi 21.3). The app's
+  pre-existing `Host.socketURL` builds `ws://…:<http port>/jsonrpc`, so the
+  in-app notification probe will likely fail where `check-host.py` passes — the
+  script tries the configured port then falls back to `9090`. The self-check
+  reports this honestly as a notification-layer failure; fixing `Host.socketURL`
+  is **out of scope** for `add-connection-diagnostics`.
+- **`Host.lastCheck` must stay optional.** `HostStore.load()` decodes persisted
+  hosts with `try?`, so adding a *non-optional* field to `Host` makes every saved
+  host fail to decode and silently produces an empty list. `lastCheck` is a
+  stored optional defaulting to `nil`, guarded by a back-compat decode test
+  (`HostPersistenceTests.testDecodesPreChangeHostsWithoutLastCheck`).
 
 ## Copy-paste verification
 

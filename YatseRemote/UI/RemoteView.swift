@@ -3,12 +3,14 @@ import SwiftUI
 struct RemoteView: View {
     let host: Host
     @StateObject private var model: AppModel
+    @EnvironmentObject private var store: HostStore
 
     @State private var scrubSeconds: Double?
     @State private var volumeDraft: Double?
     @State private var showingLibrary = false
     @State private var showingQueue = false
     @State private var showingKeyboard = false
+    @State private var showingDiagnostics = false
 
     init(host: Host, password: String) {
         self.host = host
@@ -53,12 +55,23 @@ struct RemoteView: View {
                     Image(systemName: "list.bullet")
                 }
             }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { showingDiagnostics = true } label: {
+                    Image(systemName: "stethoscope")
+                }
+                .accessibilityLabel("Connection check")
+            }
         }
         .task { await model.connect() }
         .onDisappear { model.disconnect() }
         .sheet(isPresented: $showingLibrary) { LibraryView(model: model) }
         .sheet(isPresented: $showingQueue) { QueueSheet(model: model) }
         .sheet(isPresented: $showingKeyboard) { TextEntrySheet(model: model) }
+        .sheet(isPresented: $showingDiagnostics) {
+            DiagnosticsView(host: host, context: model.diagnosticsContext) { report in
+                store.recordCheck(for: host, summary: HostCheckStatus.summary(for: report))
+            }
+        }
     }
 
     // MARK: Sections

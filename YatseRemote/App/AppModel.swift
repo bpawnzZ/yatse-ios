@@ -46,6 +46,11 @@ final class AppModel: ObservableObject {
         self.client = KodiClient(host: host, username: host.username, password: password)
     }
 
+    /// Read-only probe surface for the connection self-check. The sheet drives
+    /// `Diagnostics` through this so it issues the same authenticated calls the
+    /// remote uses, rather than hand-rolling requests.
+    var diagnosticsContext: DiagnosticsContext { DiagnosticsContext.kodi(client) }
+
     var isPlaying: Bool { properties?.isPlaying ?? false }
     var positionSeconds: Double { properties?.time?.totalSeconds ?? 0 }
     var durationSeconds: Double { properties?.totaltime?.totalSeconds ?? 0 }
