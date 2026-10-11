@@ -107,6 +107,40 @@ final class ArtworkCache {
     func store(_ image: UIImage, for url: URL) { cache.setObject(image, forKey: url as NSURL) }
 }
 
+/// A container-filling artwork image with a 2:3 poster aspect, for grid tiles.
+/// Separate from `ArtworkImage`, whose fixed square contract the rows rely on.
+struct PosterImage: View {
+    let url: URL?
+    let username: String
+    let password: String
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        Color.clear
+            .aspectRatio(2.0 / 3.0, contentMode: .fit)
+            .overlay {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    Rectangle()
+                        .fill(.quaternary)
+                        .overlay(Image(systemName: "photo").foregroundStyle(.secondary))
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .task(id: url) { await load() }
+    }
+
+    private func load() async {
+        guard let url else {
+            image = nil
+            return
+        }
+        image = await ArtworkLoader.load(url, username: username, password: password)
+    }
+}
+
 /// One row shape for every library list.
 struct MediaRow: View {
     let item: MediaItem

@@ -143,12 +143,17 @@ struct PlayerProperties: Decodable {
     var totaltime: KodiDuration?
     var currentaudiostream: AudioStream?
     var currentsubtitle: SubtitleStream?
+    /// The full lists the Now Playing overlay's pickers are built from. Kodi
+    /// returns them alongside the current streams, so no extra call is needed.
+    var audiostreams: [AudioStream] = []
+    var subtitles: [SubtitleStream] = []
 
     var isPlaying: Bool { speed != 0 }
 
     enum CodingKeys: String, CodingKey {
         case speed, percentage, position, playlistid, shuffled, partymode
         case time, totaltime, currentaudiostream, currentsubtitle
+        case audiostreams, subtitles
         case repeatMode = "repeat"
     }
 }
@@ -167,6 +172,8 @@ extension PlayerProperties {
         totaltime = (try? container.decodeIfPresent(KodiDuration.self, forKey: .totaltime)) ?? nil
         currentaudiostream = (try? container.decodeIfPresent(AudioStream.self, forKey: .currentaudiostream)) ?? nil
         currentsubtitle = (try? container.decodeIfPresent(SubtitleStream.self, forKey: .currentsubtitle)) ?? nil
+        audiostreams = lenient(container, .audiostreams, [])
+        subtitles = lenient(container, .subtitles, [])
     }
 }
 
@@ -193,6 +200,10 @@ struct PlayerItem: Decodable {
     var episode = -1
     var runtime = 0
     var file = ""
+    /// Shown in the Now Playing overlay's info view.
+    var plot = ""
+    var year = 0
+    var genre = StringList()
 
     var artists: [String] { artist.values }
     var subtitleLine: String {
@@ -205,9 +216,17 @@ struct PlayerItem: Decodable {
         return artists.joined(separator: ", ")
     }
 
+    /// Year and genres joined for the info view, empty when neither is present.
+    var infoLine: String {
+        var parts: [String] = []
+        if year > 0 { parts.append(String(year)) }
+        parts.append(contentsOf: genre.values)
+        return parts.joined(separator: " · ")
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, label, type, title, showtitle, album, artist, thumbnail, fanart
-        case art, season, episode, runtime, file
+        case art, season, episode, runtime, file, plot, year, genre
     }
 }
 
@@ -228,6 +247,9 @@ extension PlayerItem {
         episode = lenient(container, .episode, -1)
         runtime = lenient(container, .runtime, 0)
         file = lenient(container, .file, "")
+        plot = lenient(container, .plot, "")
+        year = lenient(container, .year, 0)
+        genre = lenient(container, .genre, StringList())
     }
 }
 

@@ -21,12 +21,13 @@ See [`docs/CLEANROOM.md`](docs/CLEANROOM.md) for what was and was not taken.
 |---|---|
 | Hosts | add / edit / delete, Basic auth, password in Keychain, HTTP or HTTPS, Wake-on-LAN (MAC + port) |
 | Discovery | Bonjour `_xbmc-jsonrpc-h._tcp` / `_xbmc-jsonrpc._tcp` |
-| Now playing | poster, title, show/artist line, live progress, seek |
-| Transport | stop / play-pause / next on the persistent mini-player; back, fullscreen, info, keyboard and context tiles on the remote (previous, shuffle, repeat, subtitles, audio-stream and the queue return with the Now Playing page) |
+| Now playing | full-screen overlay opened from the mini-player: see-through artwork backdrop, a seek slider with elapsed/duration, and Info |
+| Transport | previous / rewind / play-pause / forward / next / stop in the Now Playing overlay; back, fullscreen, info, keyboard and context tiles on the remote |
+| Streams | audio-stream and subtitle pickers (including subtitles off) and a video-zoom control, in the Now Playing overlay |
 | Shell | host-centric: slide-out drawer (Home, Movies, TV Shows, Music, Pvr, Files, Addons, Remote, then Settings and About) with a host header and switcher, and a persistent mini-player while a player is active |
-| Remote | one screen (no tabs): app bar with host name and power/cast/remote, a shortcut strip, volume and utility tile rows, an accent d-pad with an outlined select, a bare Back control, touchpad mode, keyboard text entry; the current item's artwork as a blurred background with translucent tiles while playing |
-| Queue | playlist jump / remove / clear — the sheet is built but is not surfaced yet (it mounts on the Now Playing page in a later phase) |
-| Library | Movies, TV Shows → Episodes, Artists → Albums, paged at 60 rows, tap to play |
+| Remote | one screen (no tabs): pinned status, shortcut, volume and utility tile rows; a directional pad that fills the screen below them (accent arrows, outlined select), a bare Back control and a touchpad toggle; keyboard text entry; the current item's artwork as a blurred background with translucent tiles while playing |
+| Queue | playlist jump / remove / clear, shown in the Now Playing overlay |
+| Library | Movies and TV Shows as a two-column poster grid; Artists → Albums and Episodes as lists; paged at 60 rows, tap to play |
 | Status | connection state, server name + version, in-app error surface |
 | Self-check | ordered, read-only, per-layer connection diagnostic with a copyable redacted report and persisted per-host status |
 
@@ -41,12 +42,19 @@ stream survive moving between destinations.
   mic / search actions) and the destinations above. Selecting the current host
   again is a no-op; deleting the active host returns the app to the picker.
 - **Mini-player** — pinned above every destination while a player is active, with
-  a thumbnail, the title, and stop / play-pause / next. Tapping its title opens
-  the Remote.
-- **Remote** — a single screen with no tabs: the app bar, the shortcut strip
-  (Home, Movies, TV Shows, Music, Pictures), volume and utility tiles, the d-pad,
-  a bare Back arrow, and a touchpad toggle. While something plays, the item's
-  artwork is the blurred background and the tiles turn translucent.
+  a thumbnail, the title, and stop / play-pause / next. Tapping it opens the
+  Now Playing overlay.
+- **Now Playing** — a full-screen overlay over a see-through rendering of the
+  current item's artwork: a seek slider with elapsed/duration, previous / rewind /
+  play-pause / forward / next / stop, repeat and shuffle, Info, audio and subtitle
+  pickers (subtitles can be turned off), a video-zoom control, and the queue.
+- **Remote** — a single screen with no tabs that does not scroll: the app bar, the
+  shortcut strip (Home, Movies, TV Shows, Music, Pictures), volume and utility
+  tiles, then a directional pad that fills every point left on the screen, with a
+  bare Back arrow and a touchpad toggle beneath it. While something plays, the
+  item's artwork is the blurred background and the tiles turn translucent.
+- **Library** — Movies and TV Shows browse as a two-column poster grid; Artists
+  and Albums, and a show's episodes, browse as lists.
 - **Not implemented** — Pvr, Files and Addons show a placeholder naming the
   destination rather than a dead end.
 

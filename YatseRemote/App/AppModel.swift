@@ -227,22 +227,72 @@ final class AppModel: ObservableObject {
         await send("Player.SetAudioStream", ["playerid": playerid, "stream": "next"])
     }
 
+    /// Select an audio stream by its own `index` (not its position in the list).
+    @MainActor
+    func selectAudioStream(index: Int) async {
+        guard let playerid else { return }
+        await send("Player.SetAudioStream", ["playerid": playerid, "stream": index])
+    }
+
+    /// Select a subtitle stream by its own `index`.
+    @MainActor
+    func selectSubtitle(index: Int) async {
+        guard let playerid else { return }
+        await send("Player.SetSubtitle",
+                   ["playerid": playerid, "subtitle": SubtitleSelection.stream(index).payloadValue])
+    }
+
+    /// Turn subtitles off for the current item.
+    @MainActor
+    func subtitlesOff() async {
+        guard let playerid else { return }
+        await send("Player.SetSubtitle",
+                   ["playerid": playerid, "subtitle": SubtitleSelection.off.payloadValue])
+    }
+
+    @MainActor
+    func setShuffle(_ on: Bool) async {
+        guard let playerid else { return }
+        await send("Player.SetShuffle", ["playerid": playerid, "shuffle": on])
+    }
+
     @MainActor
     func toggleShuffle() async {
+        await setShuffle(!(properties?.shuffled ?? false))
+    }
+
+    @MainActor
+    func setRepeat(_ mode: RepeatMode) async {
         guard let playerid else { return }
-        await send("Player.SetShuffle", ["playerid": playerid, "shuffle": !(properties?.shuffled ?? false)])
+        await send("Player.SetRepeat", ["playerid": playerid, "repeat": mode.rawValue])
     }
 
     @MainActor
     func cycleRepeat() async {
+        await setRepeat(RepeatMode.from(properties?.repeatMode ?? "off").next)
+    }
+
+    /// Previous / next item in the queue.
+    @MainActor
+    func previous() async { await skip("previous") }
+
+    @MainActor
+    func next() async { await skip("next") }
+
+    /// Relative seek for the overlay's rewind / forward controls. `step` is one
+    /// of Kodi's step tokens (`smallbackward`, `smallforward`, …).
+    @MainActor
+    func stepSeek(_ step: String) async {
         guard let playerid else { return }
-        let next: String
-        switch properties?.repeatMode {
-        case "off": next = "all"
-        case "all": next = "one"
-        default: next = "off"
-        }
-        await send("Player.SetRepeat", ["playerid": playerid, "repeat": next])
+        await send("Player.Seek", ["playerid": playerid, "value": ["step": step]])
+    }
+
+    /// Advance the video zoom / aspect mode. Kodi exposes no video-stream list, so
+    /// this is the `aspectratio` action; the action string is confirmed against
+    /// the live server's action enum before shipping.
+    @MainActor
+    func cycleAspect() async {
+        await key("aspectratio")
     }
 
     @MainActor
@@ -320,6 +370,42 @@ final class AppModel: ObservableObject {
                 guard let self else { return }
                 await self.refresh(light: true)
             }
+        }
+    }
+}
+
+/// Kodi's repeat mode, with the cycle the overlay's repeat control walks. Pure so
+/// the off → all → one ordering is unit-tested without a host.
+enum RepeatMode: String, CaseIterable {
+    case off
+    case all
+    case one
+
+    var next: RepeatMode {
+        switch self {
+        case .off: return .all
+        case .all: return .one
+        case .one: return .off
+        }
+    }
+
+    /// Map a raw Kodi value; anything unrecognised is treated as off.
+    static func from(_ raw: String) -> RepeatMode {
+        RepeatMode(rawValue: raw) ?? .off
+    }
+}
+
+/// What `Player.SetSubtitle`'s `subtitle` parameter should carry: the string
+/// `"off"` to disable, or the stream's own `index` to select one. Pure so the
+/// "off is not index 0" distinction is unit-tested.
+enum SubtitleSelection: Equatable {
+    case off
+    case stream(Int)
+
+    var payloadValue: Any {
+        switch self {
+        case .off: return "off"
+        case .stream(let index): return index
         }
     }
 }

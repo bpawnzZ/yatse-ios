@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// The Remote: one screen, no tabs. App bar with the host name and power / cast /
-/// remote actions; a shortcut strip; volume and utility tile rows; a large
-/// directional pad with accent arrows and an outlined select; a bare Back
-/// control; and a touchpad toggle. While something is playing the current item's
-/// artwork is the blurred background and the tiles go translucent.
+/// The Remote: one screen, no scrolling. App bar with the host name and power /
+/// cast / remote actions; a shortcut strip; volume and utility tile rows pinned
+/// at the top; then the directional pad, which expands to fill every point left
+/// on the screen, with a bare Back control and the touchpad toggle beneath it.
+/// While something is playing the current item's artwork is the blurred
+/// background and the tiles go translucent.
 struct RemoteScreen: View {
     @ObservedObject var model: AppModel
     let onOpenDrawer: () -> Void
@@ -14,6 +15,9 @@ struct RemoteScreen: View {
     @State private var showingCastNotice = false
     @State private var touchpadEnabled = false
     @State private var pendingPower: PowerAction?
+
+    /// Height reserved below the pad for the Back / touchpad row.
+    private static let bottomRowHeight: CGFloat = 56
 
     private enum PowerAction: String, Identifiable {
         case suspend, reboot, shutdown
@@ -41,25 +45,23 @@ struct RemoteScreen: View {
         ZStack {
             artworkBackground
 
-            ScrollView {
-                VStack(spacing: 16) {
-                    statusLine
-                    shortcutStrip
-                    volumeRow
-                    utilityRow
-                    controlPad
+            VStack(spacing: 14) {
+                statusLine
+                shortcutStrip
+                volumeRow
+                utilityRow
+                controlPad
+                    .frame(maxHeight: .infinity)
 
-                    if let error = model.lastError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                if let error = model.lastError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 12)
             }
-            .scrollDisabled(touchpadEnabled)
+            .padding(.horizontal)
+            .padding(.vertical, 12)
         }
         .navigationTitle(model.host.displayName)
         .navigationBarTitleDisplayMode(.inline)
@@ -199,73 +201,104 @@ struct RemoteScreen: View {
     // MARK: Directional pad
 
     private var controlPad: some View {
-        VStack(spacing: 8) {
-            if touchpadEnabled {
-                TouchpadSurface(model: model)
-                    .frame(height: 260)
-            } else {
-                dpadButton("arrowtriangle.up.fill") { await model.key("up") }
-                HStack(spacing: 8) {
-                    dpadButton("arrowtriangle.left.fill") { await model.key("left") }
-                    selectButton
-                    dpadButton("arrowtriangle.right.fill") { await model.key("right") }
+        GeometryReader { geo in
+            let side = ControlPadMetrics.side(in: geo.size, reserved: Self.bottomRowHeight)
+            VStack(spacing: 8) {
+                if touchpadEnabled {
+                    TouchpadSurface(model: model)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: side)
+                } else {
+                    padGrid(side: side)
                 }
-                dpadButton("arrowtriangle.down.fill") { await model.key("down") }
+
+                HStack {
+                    backButton
+                    Spacer()
+                    touchpadToggle
+                }
+                .frame(height: Self.bottomRowHeight - 8)
             }
-
-            HStack {
-                Button {
-                    Task { await model.key("back") }
-                } label: {
-                    Image(systemName: "arrow.uturn.backward")
-                        .font(.title2)
-                        .frame(width: 48, height: 48)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Back")
-
-                Spacer()
-
-                Button {
-                    touchpadEnabled.toggle()
-                } label: {
-                    Image(systemName: "hand.tap")
-                        .font(.title3)
-                        .frame(width: 48, height: 48)
-                        .background(touchpadEnabled ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary),
-                                    in: RoundedRectangle(cornerRadius: 12))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Toggle touchpad")
-            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
     }
 
-    private func dpadButton(_ symbol: String, action: @escaping () async -> Void) -> some View {
+    private func padGrid(side: CGFloat) -> some View {
+        let cell = max(side, 0) / 3
+        return VStack(spacing: 0) {
+            HStack(spacing: 0) {
+                Color.clear.frame(width: cell, height: cell)
+                dpadButton("arrowtriangle.up.fill", cell: cell) { await model.key("up") }
+                Color.clear.frame(width: cell, height: cell)
+            }
+            HStack(spacing: 0) {
+                dpadButton("arrowtriangle.left.fill", cell: cell) { await model.key("left") }
+                selectButton(cell: cell)
+                dpadButton("arrowtriangle.right.fill", cell: cell) { await model.key("right") }
+            }
+            HStack(spacing: 0) {
+                Color.clear.frame(width: cell, height: cell)
+                dpadButton("arrowtriangle.down.fill", cell: cell) { await model.key("down") }
+                Color.clear.frame(width: cell, height: cell)
+            }
+        }
+        .frame(width: max(side, 0), height: max(side, 0))
+    }
+
+    private func dpadButton(_ symbol: String, cell: CGFloat, action: @escaping () async -> Void) -> some View {
         Button {
             Task { await action() }
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 32))
+                .font(.system(size: max(cell * 0.4, 16)))
                 .foregroundStyle(.tint)
-                .frame(width: 78, height: 78)
+                .frame(width: max(cell - 8, 0), height: max(cell - 8, 0))
                 .background(tileBackground, in: RoundedRectangle(cornerRadius: 16))
+                .frame(width: cell, height: cell)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
-    private var selectButton: some View {
+    private func selectButton(cell: CGFloat) -> some View {
         Button {
             Task { await model.key("select") }
         } label: {
             Circle()
                 .strokeBorder(.primary, lineWidth: 3)
-                .frame(width: 78, height: 78)
+                .frame(width: max(cell - 16, 0), height: max(cell - 16, 0))
                 .contentShape(Circle())
+                .frame(width: cell, height: cell)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Select")
+    }
+
+    private var backButton: some View {
+        Button {
+            Task { await model.key("back") }
+        } label: {
+            Image(systemName: "arrow.uturn.backward")
+                .font(.title2)
+                .frame(width: 48, height: 48)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Back")
+    }
+
+    private var touchpadToggle: some View {
+        Button {
+            touchpadEnabled.toggle()
+        } label: {
+            Image(systemName: "hand.tap")
+                .font(.title3)
+                .frame(width: 48, height: 48)
+                .background(touchpadEnabled ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary),
+                            in: RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Toggle touchpad")
     }
 
     // MARK: Artwork background
@@ -293,6 +326,19 @@ struct RemoteScreen: View {
         } else {
             Task { await model.openInKodi(window: "Pictures") }
         }
+    }
+}
+
+/// The square the directional pad can occupy within a region, keeping it a
+/// square so the arrows and select stay circular, and never letting it overflow
+/// the space or go negative. Pure so the one non-obvious number in the Remote's
+/// layout is unit-testable without a running view.
+enum ControlPadMetrics {
+    /// The side of the pad that fits in `available` leaving `reserved` points
+    /// beneath it (the Back / touchpad row).
+    static func side(in available: CGSize, reserved: CGFloat = 0) -> CGFloat {
+        let headroom = available.height - reserved
+        return max(min(available.width, headroom), 0)
     }
 }
 

@@ -1,5 +1,9 @@
 import SwiftUI
 
+/// Browses one library section. Poster media (Movies, TV Shows) is a two-column
+/// grid of poster tiles; media read as text (Artists, Albums) stays a list. The
+/// two share pagination, refresh and the empty/error state, so there is still
+/// one browser — only the layout differs.
 struct LibraryView: View {
     @ObservedObject var model: AppModel
     let section: LibrarySection
@@ -13,38 +17,13 @@ struct LibraryView: View {
     private let pageSize = 60
 
     var body: some View {
-        List {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                row(for: item)
-                    .onAppear {
-                        if index >= items.count - 5 {
-                            Task { await loadMore() }
-                        }
-                    }
-            }
-
-            if isLoading && !items.isEmpty {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
-                }
+        Group {
+            switch section.layout {
+            case .grid: grid
+            case .list: list
             }
         }
-        .listStyle(.plain)
-        .overlay {
-            if items.isEmpty {
-                if isLoading {
-                    ProgressView()
-                } else {
-                    Text(error ?? section.emptyMessage)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding()
-                }
-            }
-        }
+        .overlay { emptyState }
         .navigationTitle(section.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -66,8 +45,67 @@ struct LibraryView: View {
         .task { await reload() }
     }
 
+    // MARK: Layouts
+
+    private var list: some View {
+        List {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                listRow(for: item)
+                    .onAppear { loadMoreIfNeeded(index) }
+            }
+
+            if isLoading && !items.isEmpty {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
+                }
+            }
+        }
+        .listStyle(.plain)
+    }
+
+    private var grid: some View {
+        ScrollView {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 12),
+                    GridItem(.flexible(), spacing: 12),
+                ],
+                spacing: 16
+            ) {
+                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                    gridCell(for: item)
+                        .onAppear { loadMoreIfNeeded(index) }
+                }
+
+                if isLoading && !items.isEmpty {
+                    ProgressView().gridCellColumns(2)
+                }
+            }
+            .padding()
+        }
+    }
+
     @ViewBuilder
-    private func row(for item: MediaItem) -> some View {
+    private var emptyState: some View {
+        if items.isEmpty {
+            if isLoading {
+                ProgressView()
+            } else {
+                Text(error ?? section.emptyMessage)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding()
+            }
+        }
+    }
+
+    // MARK: Rows and cells
+
+    @ViewBuilder
+    private func listRow(for item: MediaItem) -> some View {
         if let child = section.childRequest(for: item) {
             NavigationLink {
                 ChildrenView(model: model, request: child, heading: item.heading)
@@ -81,6 +119,30 @@ struct LibraryView: View {
                 MediaRow(item: item, username: model.host.username, password: model.password)
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func gridCell(for item: MediaItem) -> some View {
+        if let child = section.childRequest(for: item) {
+            NavigationLink {
+                ChildrenView(model: model, request: child, heading: item.heading)
+            } label: {
+                PosterTile(item: item, username: model.host.username, password: model.password)
+            }
+        } else {
+            Button {
+                Task { await play(item) }
+            } label: {
+                PosterTile(item: item, username: model.host.username, password: model.password)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func loadMoreIfNeeded(_ index: Int) {
+        if index >= items.count - 5 {
+            Task { await loadMore() }
         }
     }
 
@@ -109,6 +171,34 @@ struct LibraryView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// One grid tile: poster artwork with the title and detail line beneath.
+struct PosterTile: View {
+    let item: MediaItem
+    let username: String
+    let password: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            PosterImage(
+                url: Artwork.poster(for: item.art, thumbnail: item.thumbnail),
+                username: username,
+                password: password
+            )
+            Text(item.heading)
+                .font(.subheadline)
+                .lineLimit(2)
+                .foregroundStyle(.primary)
+            if !item.detailLine.isEmpty {
+                Text(item.detailLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .contentShape(Rectangle())
     }
 }
 

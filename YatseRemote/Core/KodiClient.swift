@@ -170,6 +170,7 @@ final class KodiClient {
                 "properties": [
                     "title", "artist", "album", "thumbnail", "fanart", "showtitle",
                     "season", "episode", "runtime", "file", "art",
+                    "plot", "year", "genre",
                 ],
             ],
             as: ItemPayload.self
