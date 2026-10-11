@@ -80,6 +80,16 @@ CI is the compiler. A teammate may not mark a task complete because the code "lo
 - **A green check does not mean the feature works.** A passing build proves it compiles. A passing test proves what that test asserts. `DiagnosticsView` has never been rendered on a device: describe it as untested, not as working. Every unknown stays labelled as an unknown.
 - Keep the diff proportional. No new dependencies, no new entitlements, no CI workflow changes, no edits to planning artifacts.
 
+## How your agents must speak (every teammate, and you)
+
+Transport is not what makes a team legible — the protocol is. Two rules, both mandatory.
+
+**1. Hand off through artifacts, not chat.** Anything one teammate needs another to act on goes in a file at `openspec/changes/add-connection-diagnostics/handoff/<task>-<owner>.md`: task id · state · files touched · the exact command run · its verbatim output · blocker · what you need from the named recipient. Send the path, not the story. Worktrees are isolated, so the file travels by being committed to your branch — merge it before the recipient needs it. Chat is for coordination; artifacts are for content.
+
+**2. Every message carries what you did, the evidence, what you need, and why it matters.** "Done" without the command and its output is not a report. Neither you nor any teammate may treat a peer's self-report as evidence: a claim that something passes is verified only by the run that produced it. If you cannot see that output, record the claim as unverified — including in your final report to Alpha.
+
+**If you are running on opencode-ensemble:** `team_message` truncates messages on delivery to the lead. Call `team_results` for the full text of any message you intend to rely on, and route anything longer than a sentence through a handoff file.
+
 ## Hard constraints
 
 - **Credentials never enter the repository.** Task 5.2 needs the live Kodi host. The host, username and password already in use are in `/home/insomnia/reverseEngineer/yatse/probe_jsonrpc.py`; read them into `KODI_HOST`, `KODI_USER`, `KODI_PASS` for that one command. `scripts/check-host.py` must read those from the environment only, must define no default for them, and must exit non-zero with a clear message when they are missing. If they are unavailable, ask — never invent placeholders, never commit them.
