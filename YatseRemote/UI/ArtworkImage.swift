@@ -62,12 +62,15 @@ enum ArtworkLoader {
     }
 }
 
-/// Full-bleed blurred artwork behind the remote while something is playing.
+/// Full-bleed blurred artwork behind the remote while something is playing. The
+/// scrim is the theme's own tint, so blue stays blue instead of blacking the
+/// artwork out.
 struct ArtworkBackground: View {
     let url: URL?
     let username: String
     let password: String
 
+    @Environment(\.remoteTheme) private var theme
     @State private var image: UIImage?
 
     var body: some View {
@@ -82,7 +85,7 @@ struct ArtworkBackground: View {
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
             .blur(radius: 30)
-            .overlay(Color.black.opacity(0.5))
+            .overlay(theme.artworkScrim)
             .ignoresSafeArea()
         }
         .task(id: url) {

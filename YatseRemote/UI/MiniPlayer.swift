@@ -6,8 +6,11 @@ struct MiniPlayer: View {
     @ObservedObject var model: AppModel
     let onOpen: () -> Void
 
+    @Environment(\.remoteTheme) private var theme
+
     /// Shown only while a player is active. Kept static and pure so the rule is
-    /// unit-testable without a running host.
+    /// unit-testable without a running host — the model is responsible for
+    /// clearing `activePlayer` when playback ends, so the bar cannot outlive it.
     static func isVisible(activePlayer: ActivePlayer?) -> Bool {
         activePlayer != nil
     }
@@ -30,7 +33,7 @@ struct MiniPlayer: View {
                     if !subtitle.isEmpty {
                         Text(subtitle)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.icon.opacity(0.75))
                             .lineLimit(1)
                     }
                 }
@@ -40,14 +43,21 @@ struct MiniPlayer: View {
             .contentShape(Rectangle())
             .onTapGesture(perform: onOpen)
 
-            control("stop.fill") { await model.stopPlayback() }
-            control(model.isPlaying ? "pause.fill" : "play.fill") { await model.togglePlayPause() }
-            control("forward.fill") { await model.skip("next") }
+            control("stop", label: "Stop") { await model.stopPlayback() }
+            control(model.isPlaying ? "pause" : "play", label: model.isPlaying ? "Pause" : "Play") {
+                await model.togglePlayPause()
+            }
+            control("forward.end", label: "Next") { await model.skip("next") }
         }
+        .foregroundStyle(theme.icon)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+        .background(theme.barFill)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(theme.divider)
+                .frame(height: 1.5)
+        }
     }
 
     private var title: String {
@@ -59,15 +69,18 @@ struct MiniPlayer: View {
 
     private var subtitle: String { model.item?.subtitleLine ?? "" }
 
-    private func control(_ symbol: String, action: @escaping () async -> Void) -> some View {
+    /// Outlined transport icons throughout — the filled variants read as heavy
+    /// against a translucent bar.
+    private func control(_ symbol: String, label: String, action: @escaping () async -> Void) -> some View {
         Button {
             Task { await action() }
         } label: {
             Image(systemName: symbol)
                 .font(.title3)
-                .frame(width: 40, height: 40)
+                .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 }

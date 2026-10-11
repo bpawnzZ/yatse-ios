@@ -10,6 +10,7 @@ struct YatseRemoteApp: App {
             RootView()
                 .environmentObject(store)
                 .environmentObject(session)
+                .themedRoot()
                 .preferredColorScheme(.dark)
         }
     }

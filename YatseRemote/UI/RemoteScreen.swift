@@ -1,15 +1,20 @@
 import SwiftUI
 
-/// The Remote: one screen, no scrolling. App bar with the host name and power /
-/// cast / remote actions; a shortcut strip; volume and utility tile rows pinned
-/// at the top; then the directional pad, which expands to fill every point left
-/// on the screen, with a bare Back control and the touchpad toggle beneath it.
-/// While something is playing the current item's artwork is the blurred
-/// background and the tiles go translucent.
+/// The Remote: one screen, no scrolling. A flat header with the host name and
+/// power / cast / remote actions; a shortcut bar; volume and utility tile rows;
+/// then the directional pad, which expands to fill every point left on the
+/// screen, with a bare Back control and the touchpad toggle beneath it.
+///
+/// Every colour comes from the active `RemoteTheme`, so the blue and dark
+/// themes differ only in tokens. While something is playing the current item's
+/// artwork is the blurred background and the tiles go translucent, letting the
+/// artwork read through.
 struct RemoteScreen: View {
     @ObservedObject var model: AppModel
     let onOpenDrawer: () -> Void
     let onSelect: (ShellDestination) -> Void
+
+    @Environment(\.remoteTheme) private var theme
 
     @State private var showingKeyboard = false
     @State private var showingCastNotice = false
@@ -18,6 +23,10 @@ struct RemoteScreen: View {
 
     /// Height reserved below the pad for the Back / touchpad row.
     private static let bottomRowHeight: CGFloat = 56
+    /// Side of a volume or utility tile. Above the 44pt tap-target floor.
+    private static let smallTile: CGFloat = 54
+    /// Gap between D-pad tiles; uniform, so the pad stays a tight plus.
+    private static let padGap: CGFloat = 6
 
     private enum PowerAction: String, Identifiable {
         case suspend, reboot, shutdown
@@ -43,9 +52,11 @@ struct RemoteScreen: View {
 
     var body: some View {
         ZStack {
+            theme.background.ignoresSafeArea()
             artworkBackground
 
             VStack(spacing: 14) {
+                header
                 statusLine
                 shortcutStrip
                 volumeRow
@@ -54,31 +65,19 @@ struct RemoteScreen: View {
                     .frame(maxHeight: .infinity)
 
                 if let error = model.lastError {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle")
+                        Text(error)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(theme.icon)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
         }
-        .navigationTitle(model.host.displayName)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
-                    .accessibilityLabel("Open menu")
-            }
-            ToolbarItemGroup(placement: .navigationBarTrailing) {
-                powerMenu
-                Button { showingCastNotice = true } label: { Image(systemName: "airplayvideo") }
-                    .accessibilityLabel("Cast")
-                Image(systemName: "av.remote")
-                    .foregroundStyle(.tint)
-                    .accessibilityLabel("Remote")
-            }
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showingKeyboard) { TextEntrySheet(model: model) }
         .alert("Casting", isPresented: $showingCastNotice) {
             Button("OK", role: .cancel) {}
@@ -102,7 +101,41 @@ struct RemoteScreen: View {
         }
     }
 
-    // MARK: App bar
+    // MARK: Header
+
+    /// Flat and plain: the hamburger, the title, then power / cast / remote,
+    /// with no circular button backgrounds and no pill container.
+    private var header: some View {
+        HStack(spacing: 10) {
+            headerButton("line.3.horizontal", label: "Open menu", action: onOpenDrawer)
+
+            Text(model.host.displayName)
+                .font(.headline)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+
+            Spacer(minLength: 0)
+
+            powerMenu
+            headerButton("airplayvideo", label: "Cast") { showingCastNotice = true }
+            Image(systemName: "av.remote")
+                .font(.title3)
+                .frame(width: 44, height: 44)
+                .accessibilityLabel("Remote")
+        }
+        .foregroundStyle(theme.icon)
+    }
+
+    private func headerButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.title3)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
 
     private var powerMenu: some View {
         Menu {
@@ -122,80 +155,116 @@ struct RemoteScreen: View {
             }
         } label: {
             Image(systemName: "power")
+                .font(.title3)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel("Power")
     }
 
-    // MARK: Status
+    // MARK: Connection state
 
+    /// Shown only when it carries information — while connecting, or after a
+    /// failure. The connected state says nothing: the green dot and the version
+    /// string are gone from it, but the logic behind them is unchanged.
+    @ViewBuilder
     private var statusLine: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(model.status.isConnected ? .green : .red)
-                .frame(width: 8, height: 8)
-            Text(model.status.isConnected
-                 ? (model.serverName.isEmpty ? model.status.label : "\(model.serverName) \(model.serverVersion)")
-                 : model.status.label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Spacer()
+        if !model.status.isConnected {
+            HStack(spacing: 8) {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(.caption2)
+                Text(model.status.label)
+                    .font(.caption)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(theme.icon.opacity(0.85))
         }
     }
 
     // MARK: Rows
 
+    /// Icons only, on one flat bar, evenly spread. The visible labels are gone
+    /// but each button keeps its accessibility label.
     private var shortcutStrip: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 0) {
             ForEach(RemoteShortcut.allCases) { shortcut in
                 Button {
                     activate(shortcut)
                 } label: {
-                    VStack(spacing: 6) {
-                        Image(systemName: shortcut.systemImage)
-                            .font(.title3)
-                        Text(shortcut.title)
-                            .font(.caption2)
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(tileBackground, in: RoundedRectangle(cornerRadius: 12))
+                    Image(systemName: shortcut.systemImage)
+                        .font(.title3)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(shortcut.title)
             }
         }
+        .foregroundStyle(theme.icon)
+        .background(theme.navBarFill)
     }
 
+    /// Three small tiles, centred as a group rather than stretched edge to edge.
     private var volumeRow: some View {
         HStack(spacing: 10) {
-            tile("speaker.wave.1.fill") { await model.stepVolume(by: -AppModel.volumeStep) }
-            tile(model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill") { await model.toggleMute() }
-            tile("speaker.wave.3.fill") { await model.stepVolume(by: AppModel.volumeStep) }
+            smallTile("speaker.wave.1.fill", label: "Volume down") {
+                await model.stepVolume(by: -AppModel.volumeStep)
+            }
+            smallTile(model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                      label: model.muted ? "Unmute" : "Mute") {
+                await model.toggleMute()
+            }
+            smallTile("speaker.wave.3.fill", label: "Volume up") {
+                await model.stepVolume(by: AppModel.volumeStep)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
+    /// Five square tiles, each in an equal share of the row so the set spreads
+    /// evenly without the tiles themselves being stretched. Back lives at the
+    /// bottom of the pad now, not here.
     private var utilityRow: some View {
-        HStack(spacing: 10) {
-            tile("arrow.backward") { await model.key("back") }
-            tile("arrow.up.left.and.arrow.down.right") { await model.toggleFullscreen() }
-            tile("info.circle") { await model.key("info") }
-            tile("keyboard") { showingKeyboard = true }
-            tile("list.bullet") { await model.key("contextmenu") }
+        HStack(spacing: 0) {
+            utilityTile("captions.bubble", label: "Subtitles") { await model.cycleSubtitle() }
+            utilityTile("arrow.up.left.and.arrow.down.right", label: "Fullscreen") {
+                await model.toggleFullscreen()
+            }
+            utilityTile("info.circle", label: "Info") { await model.key("info") }
+            utilityTile("keyboard", label: "Keyboard") { showingKeyboard = true }
+            utilityTile("list.bullet", label: "Menu") { await model.key("contextmenu") }
         }
     }
 
-    private func tile(_ symbol: String, action: @escaping () async -> Void) -> some View {
+    private func smallTile(_ symbol: String, label: String, action: @escaping () async -> Void) -> some View {
         Button {
             Task { await action() }
         } label: {
-            Image(systemName: symbol)
-                .font(.title3)
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(tileBackground, in: RoundedRectangle(cornerRadius: 12))
+            tileLabel(symbol)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ThemeTileButtonStyle(theme: theme))
+        .accessibilityLabel(label)
+    }
+
+    private func utilityTile(_ symbol: String, label: String, action: @escaping () async -> Void) -> some View {
+        Button {
+            Task { await action() }
+        } label: {
+            tileLabel(symbol)
+        }
+        .buttonStyle(ThemeTileButtonStyle(theme: theme))
+        .accessibilityLabel(label)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func tileLabel(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.title3)
+            .foregroundStyle(theme.icon)
+            .frame(width: Self.smallTile, height: Self.smallTile)
+            .contentShape(Rectangle())
     }
 
     // MARK: Directional pad
@@ -223,63 +292,68 @@ struct RemoteScreen: View {
         }
     }
 
+    /// A plus of equally sized tiles with one uniform gap, so the grid measures
+    /// exactly `side` across: three tiles and two gaps.
     private func padGrid(side: CGFloat) -> some View {
-        let cell = max(side, 0) / 3
-        return VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                Color.clear.frame(width: cell, height: cell)
-                dpadButton("arrowtriangle.up.fill", cell: cell) { await model.key("up") }
-                Color.clear.frame(width: cell, height: cell)
+        let tile = max((side - 2 * Self.padGap) / 3, 0)
+        return VStack(spacing: Self.padGap) {
+            HStack(spacing: Self.padGap) {
+                Color.clear.frame(width: tile, height: tile)
+                dpadButton("chevron.up", label: "Up", tile: tile) { await model.key("up") }
+                Color.clear.frame(width: tile, height: tile)
             }
-            HStack(spacing: 0) {
-                dpadButton("arrowtriangle.left.fill", cell: cell) { await model.key("left") }
-                selectButton(cell: cell)
-                dpadButton("arrowtriangle.right.fill", cell: cell) { await model.key("right") }
+            HStack(spacing: Self.padGap) {
+                dpadButton("chevron.left", label: "Left", tile: tile) { await model.key("left") }
+                selectButton(tile: tile)
+                dpadButton("chevron.right", label: "Right", tile: tile) { await model.key("right") }
             }
-            HStack(spacing: 0) {
-                Color.clear.frame(width: cell, height: cell)
-                dpadButton("arrowtriangle.down.fill", cell: cell) { await model.key("down") }
-                Color.clear.frame(width: cell, height: cell)
+            HStack(spacing: Self.padGap) {
+                Color.clear.frame(width: tile, height: tile)
+                dpadButton("chevron.down", label: "Down", tile: tile) { await model.key("down") }
+                Color.clear.frame(width: tile, height: tile)
             }
         }
-        .frame(width: max(side, 0), height: max(side, 0))
     }
 
-    private func dpadButton(_ symbol: String, cell: CGFloat, action: @escaping () async -> Void) -> some View {
+    /// Thin-stroke chevrons in the accent colour, on the same tile as select.
+    private func dpadButton(_ symbol: String, label: String, tile: CGFloat,
+                            action: @escaping () async -> Void) -> some View {
         Button {
             Task { await action() }
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: max(cell * 0.4, 16)))
-                .foregroundStyle(.tint)
-                .frame(width: max(cell - 8, 0), height: max(cell - 8, 0))
-                .background(tileBackground, in: RoundedRectangle(cornerRadius: 16))
-                .frame(width: cell, height: cell)
+                .font(.system(size: max(tile * 0.34, 14), weight: .light))
+                .foregroundStyle(theme.accent)
+                .frame(width: tile, height: tile)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ThemeTileButtonStyle(theme: theme))
+        .accessibilityLabel(label)
     }
 
-    private func selectButton(cell: CGFloat) -> some View {
+    /// The centre is a tile like every other pad button, not a floating ring.
+    private func selectButton(tile: CGFloat) -> some View {
         Button {
             Task { await model.key("select") }
         } label: {
             Circle()
-                .strokeBorder(.primary, lineWidth: 3)
-                .frame(width: max(cell - 16, 0), height: max(cell - 16, 0))
-                .contentShape(Circle())
-                .frame(width: cell, height: cell)
+                .strokeBorder(theme.icon, lineWidth: 2)
+                .frame(width: max(tile * 0.42, 16), height: max(tile * 0.42, 16))
+                .frame(width: tile, height: tile)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ThemeTileButtonStyle(theme: theme))
         .accessibilityLabel("Select")
     }
 
+    /// A plain white arrow, no tile, level with the bottom of the pad.
     private var backButton: some View {
         Button {
             Task { await model.key("back") }
         } label: {
-            Image(systemName: "arrow.uturn.backward")
+            Image(systemName: "arrow.left")
                 .font(.title2)
+                .foregroundStyle(theme.icon)
                 .frame(width: 48, height: 48)
                 .contentShape(Rectangle())
         }
@@ -287,18 +361,20 @@ struct RemoteScreen: View {
         .accessibilityLabel("Back")
     }
 
+    /// A plain accent-coloured icon, no tile; the pad itself shows the state.
     private var touchpadToggle: some View {
         Button {
             touchpadEnabled.toggle()
         } label: {
             Image(systemName: "hand.tap")
-                .font(.title3)
+                .font(.title2)
+                .foregroundStyle(theme.accent)
                 .frame(width: 48, height: 48)
-                .background(touchpadEnabled ? AnyShapeStyle(.tint) : AnyShapeStyle(.quaternary),
-                            in: RoundedRectangle(cornerRadius: 12))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Toggle touchpad")
+        .accessibilityValue(touchpadEnabled ? "On" : "Off")
     }
 
     // MARK: Artwork background
@@ -310,14 +386,12 @@ struct RemoteScreen: View {
         }
     }
 
+    /// Nil unless a player is really active, so the backdrop follows playback
+    /// rather than a cached item.
     private var backgroundArtworkURL: URL? {
         guard model.activePlayer != nil, let item = model.item else { return nil }
         if !item.fanart.isEmpty, let url = Artwork.url(item.fanart) { return url }
         return Artwork.poster(for: item.art, thumbnail: item.thumbnail)
-    }
-
-    private var tileBackground: AnyShapeStyle {
-        backgroundArtworkURL == nil ? AnyShapeStyle(.quaternary) : AnyShapeStyle(.ultraThinMaterial)
     }
 
     private func activate(_ shortcut: RemoteShortcut) {

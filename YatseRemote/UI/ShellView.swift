@@ -9,6 +9,7 @@ import SwiftUI
 /// the destination changes.
 struct ShellView: View {
     @EnvironmentObject private var session: Session
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var destination: ShellDestination = .remote
     @State private var drawerOpen = false
@@ -30,9 +31,14 @@ struct ShellView: View {
             .id(destination)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if MiniPlayer.isVisible(activePlayer: model.activePlayer) {
+                    // Removed from the tree when nothing plays, so the inset
+                    // collapses to nothing and the remote keeps the space.
                     MiniPlayer(model: model) { showingNowPlaying = true }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            .animation(.easeInOut(duration: 0.22),
+                       value: MiniPlayer.isVisible(activePlayer: model.activePlayer))
 
             if drawerOpen {
                 Color.black.opacity(0.45)
@@ -46,6 +52,12 @@ struct ShellView: View {
             }
         }
         .animation(.easeInOut(duration: 0.22), value: drawerOpen)
+        .onChange(of: scenePhase) { _, phase in
+            // Returning to the foreground, what is playing must be re-queried
+            // rather than inferred from state that froze while suspended.
+            guard phase == .active else { return }
+            Task { await model.refresh() }
+        }
         .fullScreenCover(isPresented: $showingNowPlaying) {
             NowPlayingView(model: model)
         }
