@@ -27,6 +27,40 @@ See [`docs/CLEANROOM.md`](docs/CLEANROOM.md) for what was and was not taken.
 | Queue | current playlist, jump to entry, remove entry, clear |
 | Library | Movies, TV Shows → Episodes, Artists → Albums, paged at 60 rows, tap to play |
 | Status | connection state, server name + version, in-app error surface |
+| Self-check | ordered, read-only, per-layer connection diagnostic with a copyable redacted report and persisted per-host status |
+
+## Connection self-check
+
+The host list and the remote each expose a **Check** action. It runs a fixed,
+ordered, **read-only** probe sequence against one saved host and reports the
+outcome of *every* probe — including the ones it did not reach — instead of only
+the first failure. One run therefore names the layer that is broken rather than a
+symptom, across six layers: reachability, credentials/identity, library read,
+artwork fetch, notification channel, and reported server compatibility.
+
+The result is shown live in a sheet, can be copied as a plain-text report
+(app version, scheme/host/port, server name and version, per-probe outcome and
+detail) that never contains the host password, and the last outcome is persisted
+per host so the host list distinguishes **never checked** from **checked and
+failed** (naming the failing layer and the time).
+
+Read-only is enforced mechanically: the runner issues only methods from a fixed
+allowlist and refuses anything outside it, so a diagnostic cannot disturb what is
+currently playing.
+
+The same sequence runs headless from a development host:
+
+```bash
+export KODI_HOST=http://10.13.13.7:8080
+export KODI_USER=...        # supplied via environment only — never stored in this repo
+export KODI_PASS=...
+python3 scripts/check-host.py
+```
+
+`scripts/check-host.py` reads the host, username and password **only** from the
+environment (`KODI_HOST`, `KODI_USER`, `KODI_PASS`), defines no defaults, and
+exits non-zero with a clear message if any is missing. It uses the Python
+standard library only. See `AGENT.md` for the traps this change encodes.
 
 ## Not implemented (deliberately, with reasons)
 

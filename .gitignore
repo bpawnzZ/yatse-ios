@@ -12,3 +12,7 @@ xcuserdata/
 # OpenSpec Hermes skills generated into the repo by `openspec init`
 # (the same skills are already installed globally in ~/.hermes/skills)
 .hermes/
+
+# Python bytecode (scripts/check-host.py)
+__pycache__/
+*.pyc
