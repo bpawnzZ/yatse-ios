@@ -1,0 +1,10 @@
+# xcodegen output — regenerate with `xcodegen generate`
+YatseRemote.xcodeproj/
+YatseRemote/Info.plist
+DerivedData/
+build/
+*.ipa
+*.sha256
+xcuserdata/
+*.xcuserstate
+.DS_Store

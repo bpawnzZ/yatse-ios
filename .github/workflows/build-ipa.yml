@@ -1,0 +1,102 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  DERIVED: ${{ runner.temp }}/DerivedData
+  APP_NAME: YatseRemote
+  SCHEME: YatseRemote
+  PROJECT: YatseRemote.xcodeproj
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Toolchain inventory
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          ls -d /Applications/Xcode*.app
+
+      - name: Install xcodegen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # Signing flags must be command-line overrides: the committed project has
+      # no team, and a free/personal team cannot sign what this app carries.
+      - name: Build (unsigned)
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project "$PROJECT" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED" \
+            -skipMacroValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            DEVELOPMENT_TEAM="" \
+            ONLY_ACTIVE_ARCH=NO
+
+      - name: Package IPA
+        run: |
+          set -euo pipefail
+          APP="$DERIVED/Build/Products/Release-iphoneos/$APP_NAME.app"
+          test -d "$APP" || { echo "::error::built app not found at $APP"; exit 1; }
+
+          STAGE="$RUNNER_TEMP/ipa"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE/Payload"
+          cp -R "$APP" "$STAGE/Payload/"
+
+          # Strip anything signature-shaped so on-device re-signing starts clean.
+          rm -rf "$STAGE/Payload/$APP_NAME.app/_CodeSignature"
+          rm -f  "$STAGE/Payload/$APP_NAME.app/embedded.mobileprovision"
+
+          ( cd "$STAGE" && zip -qry "$GITHUB_WORKSPACE/$APP_NAME-unsigned.ipa" Payload )
+
+      - name: Verify IPA
+        run: |
+          set -uo pipefail
+          IPA="$APP_NAME-unsigned.ipa"
+          unzip -t "$IPA"
+          unzip -l "$IPA" | head -20
+          file "$RUNNER_TEMP/ipa/Payload/$APP_NAME.app/$APP_NAME"
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$RUNNER_TEMP/ipa/Payload/$APP_NAME.app/Info.plist"
+
+          if unzip -l "$IPA" | grep -Eq '_CodeSignature|embedded.mobileprovision'; then
+            echo "::error::IPA still carries a signature"
+            exit 1
+          fi
+          echo "IPA is unsigned and clean."
+
+      - name: Checksum
+        run: |
+          set -euo pipefail
+          shasum -a 256 "$APP_NAME-unsigned.ipa" | tee "$APP_NAME-unsigned.ipa.sha256"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: ${{ env.APP_NAME }}-unsigned-ipa
+          path: |
+            ${{ env.APP_NAME }}-unsigned.ipa
+            ${{ env.APP_NAME }}-unsigned.ipa.sha256
+          if-no-files-found: error
+          retention-days: 30

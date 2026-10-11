@@ -1,0 +1,50 @@
+name: Unit tests
+
+# Separate from build-ipa.yml on purpose: simulator runs take minutes and flake,
+# and a flaky test must never block an IPA.
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install xcodegen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then brew install xcodegen; fi
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Pick and boot a simulator
+        id: sim
+        run: |
+          set -euo pipefail
+          UDID=$(python3 scripts/pick-simulator.py | cut -d'|' -f2)
+          test -n "$UDID" || { xcrun simctl list devices available; exit 1; }
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+
+      # Do NOT reuse the build workflow's unsigned flags here: a simulator test
+      # host needs ad-hoc signing, and CODE_SIGNING_ALLOWED=NO makes the job hang.
+      - name: Test
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project YatseRemote.xcodeproj \
+            -scheme YatseRemote \
+            -configuration Debug \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -skipMacroValidation \
+            -only-testing:YatseRemoteTests \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGNING_REQUIRED=NO
