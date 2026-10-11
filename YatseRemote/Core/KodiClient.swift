@@ -87,21 +87,27 @@ final class KodiClient {
         return request
     }
 
-    @discardableResult
-    func call<T: Decodable>(_ method: String, params: [String: Any] = [:], as type: T.Type) async throws -> T {
+    /// Transport + HTTP status, without decoding. The diagnostics layer is the
+    /// only caller with a reason to see raw bytes.
+    func rawCall(method: String, params: [String: Any]) async throws -> Data {
         let request = try makeRequest(method: method, params: params)
 
-        let data: Data
-        let response: URLResponse
+        let result: (Data, URLResponse)
         do {
-            (data, response) = try await session.data(for: request)
+            result = try await session.data(for: request)
         } catch {
             throw KodiError.transport(error.localizedDescription)
         }
 
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+        if let http = result.1 as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw KodiError.http(http.statusCode)
         }
+        return result.0
+    }
+
+    @discardableResult
+    func call<T: Decodable>(_ method: String, params: [String: Any] = [:], as type: T.Type) async throws -> T {
+        let data = try await rawCall(method: method, params: params)
 
         let envelope: RPCEnvelope<T>
         do {
@@ -192,6 +198,86 @@ final class KodiClient {
         }
 
         return items
+    }
+
+    // MARK: Diagnostics probes
+
+    /// Unauthenticated connect: any HTTP response — including 401 — proves the
+    /// host answered. Transport failures are preserved verbatim.
+    func probeReachability() async throws -> String {
+        guard let url = host.rpcURL else { throw KodiError.invalidHost }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = Diagnostics.reachabilityTimeout
+
+        let result: (Data, URLResponse)
+        do {
+            result = try await session.data(for: request)
+        } catch {
+            throw KodiError.transport(error.localizedDescription)
+        }
+
+        guard let http = result.1 as? HTTPURLResponse else { return "host answered" }
+        return Diagnostics.reachabilityDetail(forStatusCode: http.statusCode)
+    }
+
+    /// Authenticated fetch of a Kodi `/image/` URL — the same path `ArtworkImage`
+    /// uses. Returns the number of bytes received.
+    @discardableResult
+    func fetchImage(_ url: URL) async throws -> Int {
+        var request = URLRequest(url: url)
+        if let header = authorizationHeader() {
+            request.setValue(header, forHTTPHeaderField: "Authorization")
+        }
+
+        let result: (Data, URLResponse)
+        do {
+            result = try await session.data(for: request)
+        } catch {
+            throw KodiError.transport(error.localizedDescription)
+        }
+
+        if let http = result.1 as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw KodiError.http(http.statusCode)
+        }
+        return result.0.count
+    }
+
+    /// Opens the notification socket and waits up to `timeout` for a frame. A
+    /// connected socket that stays silent is not an error — Kodi sends nothing
+    /// while idle — so only a socket error fails.
+    func probeNotificationChannel(timeout: TimeInterval) async throws -> String {
+        guard let url = host.socketURL else { throw KodiError.invalidHost }
+
+        var request = URLRequest(url: url)
+        if let header = authorizationHeader() {
+            request.setValue(header, forHTTPHeaderField: "Authorization")
+        }
+
+        let task = session.webSocketTask(with: request)
+        task.resume()
+        defer { task.cancel(with: .goingAway, reason: nil) }
+
+        do {
+            let message = try await Diagnostics.withTimeout(timeout, probe: "Notification channel") {
+                try await task.receive()
+            }
+            let text: String
+            switch message {
+            case .string(let value): text = value
+            case .data(let value): text = String(decoding: value, as: UTF8.self)
+            @unknown default: text = ""
+            }
+            return Diagnostics.notificationOutcome(connected: true, frame: notificationName(in: text), error: nil).detail
+        } catch let error as DiagnosticsError {
+            if case .timedOut = error {
+                return Diagnostics.notificationOutcome(connected: true, frame: nil, error: nil).detail
+            }
+            throw error
+        } catch {
+            throw KodiError.transport(error.localizedDescription)
+        }
     }
 
     // MARK: Notifications
