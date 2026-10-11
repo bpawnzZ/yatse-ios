@@ -173,7 +173,7 @@ struct HostEditor: View {
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    TextField("Port", value: $host.port, format: .number)
+                    TextField("Port", value: $host.port, format: .number.grouping(.never))
                         .keyboardType(.numberPad)
                 }
 
@@ -188,7 +188,7 @@ struct HostEditor: View {
                     TextField("MAC address", text: $host.macAddress)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
-                    TextField("Wake-on-LAN port", value: $host.wolPort, format: .number)
+                    TextField("Wake-on-LAN port", value: $host.wolPort, format: .number.grouping(.never))
                         .keyboardType(.numberPad)
                 }
 
