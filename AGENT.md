@@ -22,6 +22,41 @@ Durable handoff notes. Read this before touching the project.
 - The app has **not** been run on a physical device yet. Everything so far is
   compile-verified, unit-tested and artifact-verified.
 
+## App shell (add-app-shell-navigation)
+
+The UI is host-centric and the player state lives above the navigation stack.
+
+- `YatseRemote/App/Session.swift` — `@MainActor ObservableObject` owning the
+  active `Host`, its password and its `AppModel`. `activate(host:password:)`
+  connects (re-selecting the same host is a no-op); `deactivate()` tears down;
+  `reconcile(with:)` drops the session when the active host is deleted. **The
+  `AppModel` must not move back into a screen** — a `@StateObject` in `RemoteView`
+  was destroyed on `onDisappear`, which is why playback could not persist.
+- `YatseRemote/UI/RootView.swift` — branches on `Session.model`: nil → the host
+  picker in a `NavigationStack`; non-nil → `ShellView`.
+- `YatseRemote/UI/ShellView.swift` — the shell: one `NavigationStack` for the
+  current destination, `.id(destination)` so changing destination clears pushed
+  detail screens, the mini-player as a `.safeAreaInset(edge: .bottom)`, and the
+  drawer as a ZStack overlay. Destinations are selected by value, not pushed.
+- `YatseRemote/UI/AppDrawer.swift` — `ShellDestination` (the single source of
+  truth for a destination's title/icon/implemented-ness) and `RemoteShortcut`
+  (the five quick links; Pictures is a Kodi window, not a destination). The
+  drawer and the shortcut strip both read `ShellDestination`, so they cannot
+  drift — guarded by `ShellNavigationTests`.
+- `YatseRemote/UI/MiniPlayer.swift` — `isVisible(activePlayer:)` is the pure
+  visibility rule.
+- `YatseRemote/UI/RemoteScreen.swift` — the rebuilt single-screen Remote (was
+  `RemoteView.swift`). Also holds `QueueSheet` and `TextEntrySheet`.
+- `YatseRemote/UI/Touchpad.swift` — `TouchpadGestureResolver` is pure and
+  unit-tested; the view is a thin shell over it.
+- `YatseRemote/UI/HomeScreen.swift`, `SettingsView.swift`,
+  `PlaceholderScreen.swift` — Home, Settings/About, and the honest placeholder.
+- `HostsView` gained `HostsMode` (`connect` picker vs `manage`) and no longer owns
+  a `NavigationStack`; `LibraryView` is now `LibraryView(model:section:onOpenDrawer:)`.
+- **`AppModel.send` is result-agnostic** (`IgnoreResult`): Kodi answers some
+  methods with `"OK"` and others with a boolean (`GUI.SetFullscreen`), so a fixed
+  `String` decode used to throw `malformedResponse` on half of them.
+
 ## Reverse-engineering inputs (outside this repo)
 
 ```

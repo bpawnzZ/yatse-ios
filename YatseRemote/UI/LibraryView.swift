@@ -2,9 +2,9 @@ import SwiftUI
 
 struct LibraryView: View {
     @ObservedObject var model: AppModel
-    @Environment(\.dismiss) private var dismiss
+    let section: LibrarySection
+    var onOpenDrawer: (() -> Void)? = nil
 
-    @State private var section: LibrarySection = .movies
     @State private var items: [MediaItem] = []
     @State private var total = 0
     @State private var isLoading = false
@@ -13,59 +13,57 @@ struct LibraryView: View {
     private let pageSize = 60
 
     var body: some View {
-        NavigationStack {
-            List {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    row(for: item)
-                        .onAppear {
-                            if index >= items.count - 5 {
-                                Task { await loadMore() }
-                            }
+        List {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                row(for: item)
+                    .onAppear {
+                        if index >= items.count - 5 {
+                            Task { await loadMore() }
                         }
-                }
+                    }
+            }
 
-                if isLoading && !items.isEmpty {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                        Spacer()
-                    }
+            if isLoading && !items.isEmpty {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Spacer()
                 }
             }
-            .listStyle(.plain)
-            .overlay {
-                if items.isEmpty {
-                    if isLoading {
-                        ProgressView()
-                    } else {
-                        Text(error ?? section.emptyMessage)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding()
-                    }
-                }
-            }
-            .safeAreaInset(edge: .top) {
-                Picker("Section", selection: $section) {
-                    ForEach(LibrarySection.allCases) { section in
-                        Text(section.title).tag(section)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.bottom, 6)
-                .background(.bar)
-            }
-            .navigationTitle("Library")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-            .task(id: section) { await reload() }
         }
+        .listStyle(.plain)
+        .overlay {
+            if items.isEmpty {
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Text(error ?? section.emptyMessage)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding()
+                }
+            }
+        }
+        .navigationTitle(section.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let onOpenDrawer {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
+                        .accessibilityLabel("Open menu")
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await reload() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .accessibilityLabel("Refresh")
+            }
+        }
+        .task { await reload() }
     }
 
     @ViewBuilder
