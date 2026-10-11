@@ -9,7 +9,6 @@ on:
   workflow_dispatch:
 
 env:
-  DERIVED: ${{ runner.temp }}/DerivedData
   APP_NAME: YatseRemote
   SCHEME: YatseRemote
   PROJECT: YatseRemote.xcodeproj
@@ -20,7 +19,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Toolchain inventory
         run: |
@@ -41,6 +40,7 @@ jobs:
       - name: Build (unsigned)
         run: |
           set -euo pipefail
+          DERIVED="$RUNNER_TEMP/DerivedData"
           xcodebuild build \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
@@ -58,6 +58,7 @@ jobs:
       - name: Package IPA
         run: |
           set -euo pipefail
+          DERIVED="$RUNNER_TEMP/DerivedData"
           APP="$DERIVED/Build/Products/Release-iphoneos/$APP_NAME.app"
           test -d "$APP" || { echo "::error::built app not found at $APP"; exit 1; }
 
@@ -92,7 +93,7 @@ jobs:
           set -euo pipefail
           shasum -a 256 "$APP_NAME-unsigned.ipa" | tee "$APP_NAME-unsigned.ipa.sha256"
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ env.APP_NAME }}-unsigned-ipa
           path: |
