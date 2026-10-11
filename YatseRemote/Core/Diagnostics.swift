@@ -199,7 +199,7 @@ final class Diagnostics {
 
     let host: Host
     let probes: [Probe]
-    private let context: DiagnosticsContext
+    private var context: DiagnosticsContext
 
     private var scheme: String { host.useTLS ? "https" : "http" }
 
@@ -210,20 +210,157 @@ final class Diagnostics {
     }
 
     func run(progress: (@MainActor (ProbeResult) -> Void)? = nil) async -> DiagnosticsReport {
-        _ = progress
+        var serverName = ""
+        var serverVersion = ""
+
+        // The credentials probe already asks for the server identity; observe
+        // that same read-only call to fill the report rather than re-issuing it.
+        let base = context.callRaw
+        context.callRaw = { method, params in
+            let data = try await base(method, params)
+            if method == "Application.GetProperties",
+               let envelope = try? JSONDecoder().decode(RPCEnvelope<ApplicationProperties>.self, from: data),
+               let properties = envelope.result {
+                serverName = properties.name
+                serverVersion = properties.versionLabel
+            }
+            return data
+        }
+
+        var results: [ProbeResult] = []
+        var states: [String: ProbeState] = [:]
+
+        for probe in probes {
+            var outcome: ProbeOutcome
+            if let dependency = probe.dependsOn, states[dependency] != .passed {
+                let dependencyState = states[dependency] ?? .notRun
+                outcome = .notRun("Skipped: \(dependency) did not pass (\(dependencyState.label.lowercased())).")
+            } else if let method = probe.method, !Diagnostics.readOnlyMethods.contains(method) {
+                outcome = .failed(Diagnostics.describe(
+                    DiagnosticsError.methodNotAllowlisted(method), method: nil, layer: probe.layer
+                ))
+            } else {
+                do {
+                    outcome = try await Diagnostics.withTimeout(probe.timeout, probe: probe.name) {
+                        try await probe.run(self.context)
+                    }
+                } catch {
+                    outcome = .failed(Diagnostics.describe(
+                        error, method: requestDescription(for: probe), layer: probe.layer
+                    ))
+                }
+            }
+
+            states[probe.id] = outcome.state
+            let result = ProbeResult(
+                id: probe.id, name: probe.name, layer: probe.layer,
+                state: outcome.state, detail: outcome.detail
+            )
+            results.append(result)
+            if let progress {
+                await MainActor.run { progress(result) }
+            }
+        }
+
         return DiagnosticsReport(
             appVersion: Diagnostics.appVersion,
             scheme: scheme,
             address: host.address,
             port: host.port,
-            serverName: "",
-            serverVersion: "",
-            results: []
+            serverName: serverName,
+            serverVersion: serverVersion,
+            results: results
         )
     }
 
     static func defaultProbes() -> [Probe] {
-        []
+        [
+            Probe(
+                id: "reachability",
+                name: "Host reachability",
+                layer: .reachability,
+                method: nil,
+                dependsOn: nil,
+                timeout: reachabilityTimeout,
+                run: { context in .passed(try await context.reachability()) }
+            ),
+            Probe(
+                id: "credentials",
+                name: "Credentials and identity",
+                layer: .credentials,
+                method: "Application.GetProperties",
+                dependsOn: "reachability",
+                timeout: rpcTimeout,
+                run: { context in
+                    let properties = try await context.call(
+                        "Application.GetProperties",
+                        params: ["properties": ["volume", "muted", "name", "version"]],
+                        as: ApplicationProperties.self
+                    )
+                    let identity = [properties.name, properties.versionLabel]
+                        .filter { !$0.isEmpty }
+                        .joined(separator: " ")
+                    return .passed(identity.isEmpty ? "credentials accepted" : identity)
+                }
+            ),
+            Probe(
+                id: "library",
+                name: "Library read permission",
+                layer: .library,
+                method: "VideoLibrary.GetMovies",
+                dependsOn: "credentials",
+                timeout: rpcTimeout,
+                run: { context in
+                    let payload = try await context.call(
+                        "VideoLibrary.GetMovies",
+                        params: ["properties": ["title"], "limits": ["start": 0, "end": 1]],
+                        as: ListPayload.self
+                    )
+                    let total = payload.limits?.total ?? (payload.movies?.count ?? 0)
+                    return .passed("read access — \(total) movies available")
+                }
+            ),
+            Probe(
+                id: "artwork",
+                name: "Artwork fetch",
+                layer: .artwork,
+                method: nil,
+                dependsOn: "library",
+                timeout: rpcTimeout,
+                run: { context in
+                    guard let url = try await Diagnostics.artworkURL(context) else {
+                        return .notRun("No artwork available for the playing or first library item.")
+                    }
+                    do {
+                        let bytes = try await context.imageFetch(url)
+                        return .passed("fetched \(bytes) bytes from \(url.absoluteString)")
+                    } catch {
+                        return .failed(Diagnostics.describe(error, method: url.absoluteString, layer: .artwork))
+                    }
+                }
+            ),
+            Probe(
+                id: "notifications",
+                name: "Notification channel",
+                layer: .notifications,
+                method: nil,
+                dependsOn: "credentials",
+                timeout: socketTimeout,
+                run: { context in .passed(try await context.notificationChannel(Diagnostics.socketTimeout)) }
+            ),
+            Probe(
+                id: "compatibility",
+                name: "Server compatibility",
+                layer: .compatibility,
+                method: "JSONRPC.Version",
+                dependsOn: "credentials",
+                timeout: rpcTimeout,
+                run: { context in
+                    let version = try await context.call("JSONRPC.Version", as: RPCVersion.self)
+                    return Diagnostics.compatibilityOutcome(version)
+                }
+            ),
+        ]
     }
 
     static func ensureReadOnly(_ method: String) throws {
@@ -250,14 +387,102 @@ final class Diagnostics {
     }
 
     static func describe(_ error: Error, method: String?, layer: ConnectionLayer) -> String {
-        ""
+        let request = method.map { "\($0): " } ?? ""
+        return "\(request)\(message(for: error))\n\(layer.remediation)"
+    }
+
+    static func message(for error: Error) -> String {
+        guard let kodi = error as? KodiError else { return error.localizedDescription }
+        switch kodi {
+        case .invalidHost: return "host address is not usable"
+        case .http(let code): return "HTTP \(code)"
+        case .rpc(let code, let message): return "JSON-RPC error \(code): \(message)"
+        case .malformedResponse: return "response could not be parsed"
+        case .transport(let detail): return detail
+        }
     }
 
     static func reachabilityDetail(forStatusCode statusCode: Int) -> String {
-        ""
+        statusCode == 401
+            ? "host answered (HTTP 401) — reachable"
+            : "host answered (HTTP \(statusCode)) — reachable"
     }
 
     static func notificationOutcome(connected: Bool, frame: String?, error: Error?) -> ProbeOutcome {
-        .notRun("stub")
+        if let error { return .failed(error.localizedDescription) }
+        guard connected else { return .failed("notification socket did not connect") }
+        if let frame { return .passed("connected — received \(frame)") }
+        return .passed("connected, no frame within \(Int(Diagnostics.socketTimeout)) s")
+    }
+
+    static func compatibilityOutcome(_ version: RPCVersion) -> ProbeOutcome {
+        guard version.major > 0 else {
+            return .passed("JSON-RPC responded; server did not report a version")
+        }
+        return .passed("JSON-RPC \(version.major).\(version.minor).\(version.patch)")
+    }
+
+    /// Poster of the playing item, else of the first library movie; nil when no
+    /// artwork exists anywhere (the caller reports that as `notRun`, never failed).
+    static func artworkURL(_ context: DiagnosticsContext) async throws -> URL? {
+        let players = (try? await context.call("Player.GetActivePlayers", as: [ActivePlayer].self)) ?? []
+        if let player = players.first(where: { $0.isVideo }) ?? players.first,
+           let item = (try? await context.call(
+               "Player.GetItem",
+               params: ["playerid": player.playerid, "properties": ["art", "thumbnail"]],
+               as: ItemPayload.self
+           ))?.item,
+           let url = Artwork.poster(for: item.art, thumbnail: item.thumbnail) {
+            return url
+        }
+
+        let payload = try await context.call(
+            "VideoLibrary.GetMovies",
+            params: ["properties": ["art", "thumbnail"], "limits": ["start": 0, "end": 1]],
+            as: ListPayload.self
+        )
+        if let movie = payload.movies?.first,
+           let url = Artwork.poster(for: movie.art, thumbnail: movie.thumbnail) {
+            return url
+        }
+        return nil
+    }
+
+    private func requestDescription(for probe: Probe) -> String {
+        if let method = probe.method { return method }
+        switch probe.id {
+        case "reachability":
+            return "connect \(scheme)://\(host.address):\(host.port)/jsonrpc"
+        case "notifications":
+            return "socket \(host.useTLS ? "wss" : "ws")://\(host.address):\(host.port)/jsonrpc"
+        default:
+            return probe.name
+        }
+    }
+}
+
+/// `JSONRPC.Version` result; Kodi may nest it under `version` or return it flat.
+struct RPCVersion: Decodable {
+    var major = 0
+    var minor = 0
+    var patch = 0
+
+    private enum Keys: String, CodingKey { case version, major, minor, patch }
+
+    init(major: Int = 0, minor: Int = 0, patch: Int = 0) {
+        self.major = major
+        self.minor = minor
+        self.patch = patch
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: Keys.self)
+        if let nested = (try? container.decodeIfPresent(RPCVersion.self, forKey: .version)) ?? nil {
+            self = nested
+            return
+        }
+        major = lenient(container, .major, 0)
+        minor = lenient(container, .minor, 0)
+        patch = lenient(container, .patch, 0)
     }
 }
