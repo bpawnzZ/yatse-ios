@@ -17,12 +17,17 @@ struct Host: Codable, Identifiable, Hashable {
 
     var displayName: String { name.isEmpty ? address : name }
 
+    /// `URL(string:)` accepts an empty host (`https://:8080/jsonrpc` is a valid
+    /// URL object), so the guard has to be here or `KodiError.invalidHost` never
+    /// fires and every request goes to a host-less URL.
     var rpcURL: URL? {
-        URL(string: "\(useTLS ? "https" : "http")://\(address):\(port)/jsonrpc")
+        guard isUsable else { return nil }
+        return URL(string: "\(useTLS ? "https" : "http")://\(address):\(port)/jsonrpc")
     }
 
     var socketURL: URL? {
-        URL(string: "\(useTLS ? "wss" : "ws")://\(address):\(port)/jsonrpc")
+        guard isUsable else { return nil }
+        return URL(string: "\(useTLS ? "wss" : "ws")://\(address):\(port)/jsonrpc")
     }
 
     var isUsable: Bool { !address.isEmpty && (1...65535).contains(port) }

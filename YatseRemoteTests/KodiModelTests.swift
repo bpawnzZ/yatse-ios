@@ -53,7 +53,8 @@ final class KodiModelTests: XCTestCase {
     }
 
     func testPlayerItemFromLiveKodi() throws {
-        let item = try result(PlayerItem.self, from: Self.livePlayerItem)
+        // Kodi nests this one under `item`, which is what the client unwraps.
+        let item = try result(ItemPayload.self, from: Self.livePlayerItem).item
 
         XCTAssertEqual(item.title, "CL")
         XCTAssertEqual(item.type, "movie")

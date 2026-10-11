@@ -162,6 +162,11 @@ extension PlayerProperties {
 
 // MARK: - Items
 
+/// `Player.GetItem` nests its payload: `result` is `{"item": {...}}`.
+struct ItemPayload: Decodable {
+    let item: PlayerItem
+}
+
 /// `Player.GetItem` result and library rows share this shape.
 struct PlayerItem: Decodable {
     var id: Int?

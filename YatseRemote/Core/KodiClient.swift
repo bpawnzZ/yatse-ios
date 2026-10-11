@@ -156,7 +156,8 @@ final class KodiClient {
     }
 
     func currentItem(playerid: Int) async throws -> PlayerItem {
-        try await call(
+        // Kodi wraps this one: `result` is `{"item": {...}}`, not the item itself.
+        let payload = try await call(
             "Player.GetItem",
             params: [
                 "playerid": playerid,
@@ -165,8 +166,9 @@ final class KodiClient {
                     "season", "episode", "runtime", "file", "art",
                 ],
             ],
-            as: PlayerItem.self
+            as: ItemPayload.self
         )
+        return payload.item
     }
 
     /// Fetches the entire queue. Yatse shows every entry, so no truncation here.
