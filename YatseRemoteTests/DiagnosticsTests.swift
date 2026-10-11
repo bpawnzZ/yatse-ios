@@ -33,6 +33,10 @@ final class DiagnosticsTests: XCTestCase {
     {"id": 6, "jsonrpc": "2.0", "result": {"movies": [{"movieid": 1, "art": {}, "thumbnail": ""}]}}
     """#
 
+    private static let methodNotFound = #"""
+    {"error": {"code": -32601, "message": "Method not found."}, "id": 5, "jsonrpc": "2.0"}
+    """#
+
     // MARK: Test host
 
     private static var testHost: Host {
@@ -344,9 +348,87 @@ final class DiagnosticsTests: XCTestCase {
 
     func testReportNeverContainsTheHostPassword() async {
         let password = "hunter2-do-not-leak"
-        let report = await runDefault(Self.okContext())
+
+        // Thread the known password through the context exactly where the
+        // production KodiClient carries it, so a builder that leaked any
+        // captured credential would surface it in this run.
+        let context = Self.okContext(
+            reachability: { () async throws -> String in
+                _ = "Basic " + Data("kodi:\(password)".utf8).base64EncodedString()
+                return "host answered (HTTP 401) — reachable"
+            }
+        )
+        let report = await runDefault(context)
 
         XCTAssertFalse(report.text.isEmpty)
         XCTAssertFalse(report.text.contains(password))
+
+        // The header carries only the fixed field labels, so no credential-bearing
+        // field can appear there. (The word "password" is allowed inside per-probe
+        // remediation detail; the header must never hold a credential field.)
+        let header = report.text.components(separatedBy: "\n\n").first ?? ""
+        XCTAssertTrue(header.hasPrefix("Yatse Remote connection self-check"))
+        XCTAssertTrue(header.contains("App version:"))
+        XCTAssertTrue(header.contains("Host: http://10.0.0.5:8080"))
+        XCTAssertTrue(header.contains("Server: Kodi 21.3-Omega"))
+        XCTAssertFalse(header.lowercased().contains("password"))
+
+        // Sensitivity control: a detail that does carry a credential is detectable,
+        // proving the assertion above can fail if the builder ever leaked one.
+        let leaked = DiagnosticsReport(
+            appVersion: "1.0.0", scheme: "http", address: "10.0.0.5", port: 8080,
+            serverName: "Kodi", serverVersion: "21.3-Omega",
+            results: [ProbeResult(id: "x", name: "X", layer: .credentials, state: .passed, detail: password)]
+        )
+        XCTAssertTrue(leaked.text.contains(password))
+    }
+
+    func testReportAfterAFailedRunStillNamesTheLayerAndError() async {
+        let context = Self.okContext(errors: ["Application.GetProperties": KodiError.http(401)])
+        let report = await runDefault(context)
+
+        XCTAssertFalse(report.succeeded)
+        XCTAssertFalse(report.text.isEmpty)
+        XCTAssertTrue(report.text.contains(ConnectionLayer.credentials.title))
+        XCTAssertTrue(report.text.contains("HTTP 401"))
+    }
+
+    // MARK: R2 — JSON-RPC error object attribution
+
+    func testJSONRPCErrorIsAttributedWithVerbatimCodeAndMessage() async {
+        let context = Self.okContext(overrides: ["Application.GetProperties": Self.methodNotFound])
+        let report = await runDefault(context)
+        let credentials = Self.result("credentials", report)
+
+        XCTAssertEqual(credentials.state, .failed)
+        XCTAssertEqual(credentials.layer, .credentials)
+        XCTAssertTrue(credentials.detail.contains("-32601"))
+        XCTAssertTrue(credentials.detail.contains("Method not found."))
+    }
+
+    // MARK: R3 — read-only proxy: no mutating method in the allowlist
+
+    func testReadOnlyAllowlistExcludesEveryMutatingMethod() {
+        let methods = Diagnostics.readOnlyMethods
+
+        // Prefixes: no allowlisted method may start with any of these. Note
+        // `Playlist.GetItems` is read-only, so only the mutating Playlist
+        // methods are listed by exact name below.
+        let forbiddenPrefixes = [
+            "Input.", "Application.Set", "GUI.", "Settings.", "Player.Set",
+            "Player.Open", "Player.Stop", "Player.PlayPause", "Player.GoTo", "Player.Seek",
+        ]
+        let forbiddenExact = [
+            "Playlist.Add", "Playlist.Remove", "Playlist.Insert", "Playlist.Clear", "Playlist.Swap",
+        ]
+
+        for method in methods {
+            for prefix in forbiddenPrefixes {
+                XCTAssertFalse(method.hasPrefix(prefix), "read-only allowlist must not contain \(method)")
+            }
+            XCTAssertFalse(forbiddenExact.contains(method), "read-only allowlist must not contain \(method)")
+        }
+
+        XCTAssertEqual(methods.count, 9)
     }
 }
