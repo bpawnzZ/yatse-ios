@@ -56,6 +56,19 @@ The UI is host-centric and the player state lives above the navigation stack.
 - **`AppModel.send` is result-agnostic** (`IgnoreResult`): Kodi answers some
   methods with `"OK"` and others with a boolean (`GUI.SetFullscreen`), so a fixed
   `String` decode used to throw `malformedResponse` on half of them.
+- **Remote button rows are APK-faithful**, taken from
+  `decompiled/resources/res/layout/fragment_remote.xml` (+ handler `bf/a4.java`):
+  row 1 = Volume-Down, Mute, Volume-Up; row 2 = Back (`remote_return`),
+  Fullscreen (`remote_display`), Info, Keyboard, Context (`remote_context`, which
+  uses the list icon and sends `Input.ExecuteAction contextmenu`). The d-pad is
+  up/left/select/right/down with a bare Back and the touchpad toggle
+  bottom-right. **Yatse's Remote has no subtitle and no queue button** — those are
+  Now Playing-page controls here. `QueueSheet` and the playlist `AppModel` methods
+  are therefore currently unreferenced; they mount on the Now Playing page in a
+  later phase.
+- **A stroked `Circle()` hit-tests only the ring.** The Remote's select control is
+  `Circle().strokeBorder(...)`, so it needs `.contentShape(Circle())` or a tap in
+  the middle misses. (This was a real on-device bug.)
 
 ## Reverse-engineering inputs (outside this repo)
 
