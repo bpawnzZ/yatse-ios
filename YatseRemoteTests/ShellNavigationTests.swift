@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import YatseRemote
 
 /// Guards the shell's navigation model and the two pure rules the shell relies
@@ -54,10 +55,49 @@ final class ShellNavigationTests: XCTestCase {
 
     func testUnimplementedDestinationsAreFlagged() {
         XCTAssertFalse(ShellDestination.pvr.isImplemented)
-        XCTAssertFalse(ShellDestination.files.isImplemented)
-        XCTAssertFalse(ShellDestination.addons.isImplemented)
+        XCTAssertTrue(ShellDestination.files.isImplemented)
+        XCTAssertTrue(ShellDestination.addons.isImplemented)
         XCTAssertTrue(ShellDestination.remote.isImplemented)
         XCTAssertTrue(ShellDestination.settings.isImplemented)
+    }
+
+    // MARK: Icons
+
+    /// A mistyped SF Symbol name draws nothing while leaving the button
+    /// tappable — exactly how the Movies shortcut broke (an invisible control
+    /// that still navigated). Neither the compiler nor a view test can see it,
+    /// but `UIImage(systemName:)` answers nil. Every symbol the drawer, the
+    /// shortcut strip and the favourite rows can draw is checked here.
+    func testEveryDestinationSymbolExists() {
+        assertSymbolsExist(ShellDestination.allCases.map(\.systemImage))
+    }
+
+    func testEveryShortcutSymbolExists() {
+        assertSymbolsExist(RemoteShortcut.allCases.map(\.systemImage))
+    }
+
+    func testEveryLibrarySectionSymbolExists() {
+        assertSymbolsExist(LibrarySection.allCases.map(\.systemImage))
+    }
+
+    /// The row and the drawer must agree: they drifted once and only the row
+    /// broke, so the mapping lives in one place now.
+    func testShortcutsAndDrawerAgreeOnIconsAndTitles() {
+        for shortcut in RemoteShortcut.allCases {
+            guard let destination = shortcut.destination else { continue }
+            XCTAssertEqual(shortcut.systemImage, destination.systemImage,
+                           "\(shortcut.rawValue) uses a different icon than \(destination.rawValue)")
+            XCTAssertEqual(shortcut.title, destination.title)
+        }
+    }
+
+    private func assertSymbolsExist(_ names: [String],
+                                    file: StaticString = #filePath,
+                                    line: UInt = #line) {
+        let missing = names.filter { UIImage(systemName: $0) == nil }
+        XCTAssertTrue(missing.isEmpty,
+                      "SF Symbols that do not resolve on this SDK: \(missing.joined(separator: ", "))",
+                      file: file, line: line)
     }
 
     // MARK: Touchpad resolver

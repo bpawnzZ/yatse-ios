@@ -33,7 +33,8 @@ struct LibraryView: View {
                         .accessibilityLabel("Open menu")
                 }
             }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                FavoriteButton(title: section.title, target: .section(section.rawValue))
                 Button {
                     Task { await reload() }
                 } label: {
@@ -42,6 +43,7 @@ struct LibraryView: View {
                 .accessibilityLabel("Refresh")
             }
         }
+        .themedScreen()
         .task { await reload() }
     }
 
@@ -174,6 +176,31 @@ struct LibraryView: View {
     }
 }
 
+/// A toolbar star that saves the place you are looking at. Filled means it is
+/// already saved. Shared by the library, the drill-downs and the directory
+/// browser, so "favourite" means one thing in the app.
+struct FavoriteButton: View {
+    let title: String
+    let target: FavoriteTarget
+
+    @EnvironmentObject private var favorites: FavoriteStore
+
+    var body: some View {
+        let saved = favorites.contains(target)
+        Button {
+            let favorite = Favorite(title: title, target: target)
+            if saved {
+                favorites.remove(favorite)
+            } else {
+                favorites.toggle(favorite)
+            }
+        } label: {
+            Image(systemName: saved ? "star.fill" : "star")
+        }
+        .accessibilityLabel(saved ? "Remove favorite" : "Add favorite")
+    }
+}
+
 /// One grid tile: poster artwork with the title and detail line beneath.
 struct PosterTile: View {
     let item: MediaItem
@@ -239,6 +266,12 @@ struct ChildrenView: View {
         }
         .navigationTitle(request.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                FavoriteButton(title: heading, target: request.favoriteTarget)
+            }
+        }
+        .themedScreen()
         .task { await load() }
     }
 
@@ -247,6 +280,143 @@ struct ChildrenView: View {
         defer { isLoading = false }
         do {
             items = try await model.children(of: request)
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// The Files destination: the media centre's configured sources, each opening a
+/// folder browser. This is where a directory becomes reachable, and so where one
+/// becomes worth favouriting.
+struct FilesScreen: View {
+    @ObservedObject var model: AppModel
+    let onOpenDrawer: () -> Void
+
+    @State private var sources: [MediaItem] = []
+    @State private var isLoading = true
+    @State private var error: String?
+
+    var body: some View {
+        List {
+            ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
+                NavigationLink {
+                    DirectoryView(model: model, path: source.file, title: source.heading)
+                } label: {
+                    MediaRow(item: source, username: model.host.username, password: model.password, showsChevron: true)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .overlay {
+            if sources.isEmpty {
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Text(error ?? "No sources configured on this host.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding()
+                }
+            }
+        }
+        .navigationTitle("Files")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
+                    .accessibilityLabel("Open menu")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await load() }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .accessibilityLabel("Refresh")
+            }
+        }
+        .themedScreen()
+        .task { await load() }
+    }
+
+    private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            sources = try await model.sources(media: "files")
+            error = nil
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+}
+
+/// One folder on the media centre. Folders drill down; anything else plays.
+struct DirectoryView: View {
+    @ObservedObject var model: AppModel
+    let path: String
+    let title: String
+
+    @State private var items: [MediaItem] = []
+    @State private var isLoading = true
+    @State private var error: String?
+
+    var body: some View {
+        List {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                if item.isDirectory {
+                    NavigationLink {
+                        DirectoryView(model: model, path: item.file, title: item.heading)
+                    } label: {
+                        MediaRow(item: item, username: model.host.username, password: model.password, showsChevron: true)
+                    }
+                } else {
+                    Button {
+                        Task {
+                            if let payload = item.playableItem { await model.play(item: payload) }
+                        }
+                    } label: {
+                        MediaRow(item: item, username: model.host.username, password: model.password)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .listStyle(.plain)
+        .overlay {
+            if items.isEmpty {
+                if isLoading {
+                    ProgressView()
+                } else {
+                    Text(error ?? "This folder is empty.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                FavoriteButton(title: title, target: .directory(path: path))
+            }
+        }
+        .themedScreen()
+        .task { await load() }
+    }
+
+    private func load() async {
+        guard !path.isEmpty else {
+            isLoading = false
+            return
+        }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            items = try await model.directory(path, media: "files")
             error = nil
         } catch {
             self.error = error.localizedDescription

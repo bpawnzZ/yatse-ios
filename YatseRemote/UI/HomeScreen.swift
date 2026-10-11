@@ -7,6 +7,8 @@ struct HomeScreen: View {
     let onOpenDrawer: () -> Void
     let onSelect: (ShellDestination) -> Void
 
+    @Environment(\.remoteTheme) private var theme
+
     private let tiles: [ShellDestination] = [.movies, .tvShows, .music, .remote, .settings, .about]
 
     var body: some View {
@@ -22,13 +24,15 @@ struct HomeScreen: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 Image(systemName: item.systemImage)
                                     .font(.title2)
-                                    .foregroundStyle(.tint)
+                                    .foregroundStyle(theme.accent)
                                 Text(item.title)
                                     .font(.headline)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding()
-                            .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
+                            .background(theme.tileFill,
+                                        in: RoundedRectangle(cornerRadius: theme.tileCornerRadius,
+                                                             style: .continuous))
                         }
                         .buttonStyle(.plain)
                     }
@@ -37,6 +41,7 @@ struct HomeScreen: View {
             .padding()
         }
         .navigationTitle("Home")
+        .themedScreen()
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
@@ -65,6 +70,7 @@ struct HomeScreen: View {
             Spacer(minLength: 0)
         }
         .padding()
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
+        .background(theme.tileFill,
+                    in: RoundedRectangle(cornerRadius: theme.tileCornerRadius, style: .continuous))
     }
 }

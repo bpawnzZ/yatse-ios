@@ -4,12 +4,14 @@ import SwiftUI
 struct YatseRemoteApp: App {
     @StateObject private var store = HostStore()
     @StateObject private var session = Session()
+    @StateObject private var favorites = FavoriteStore()
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(store)
                 .environmentObject(session)
+                .environmentObject(favorites)
                 .themedRoot()
                 .preferredColorScheme(.dark)
         }
@@ -82,6 +84,7 @@ struct HostsView: View {
             }
         }
         .navigationTitle(mode == .connect ? "Yatse Remote" : "Hosts")
+        .themedScreen()
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { isAdding = true } label: { Image(systemName: "plus") }

@@ -22,6 +22,7 @@ struct PlaceholderScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle(destination.title)
         .navigationBarTitleDisplayMode(.inline)
+        .themedScreen()
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
@@ -49,6 +50,7 @@ struct PlaceholderSheet: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .themedScreen()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }

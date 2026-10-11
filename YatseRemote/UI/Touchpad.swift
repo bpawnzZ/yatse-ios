@@ -26,9 +26,11 @@ enum TouchpadGestureResolver {
 struct TouchpadSurface: View {
     @ObservedObject var model: AppModel
 
+    @Environment(\.remoteTheme) private var theme
+
     var body: some View {
-        RoundedRectangle(cornerRadius: 16)
-            .fill(.quaternary)
+        RoundedRectangle(cornerRadius: theme.tileCornerRadius, style: .continuous)
+            .fill(theme.tileFill)
             .overlay(
                 VStack(spacing: 8) {
                     Image(systemName: "hand.tap")
@@ -38,7 +40,7 @@ struct TouchpadSurface: View {
                         .foregroundStyle(.secondary)
                 }
             )
-            .contentShape(RoundedRectangle(cornerRadius: 16))
+            .contentShape(RoundedRectangle(cornerRadius: theme.tileCornerRadius))
             .highPriorityGesture(
                 DragGesture(minimumDistance: TouchpadGestureResolver.threshold)
                     .onEnded { value in

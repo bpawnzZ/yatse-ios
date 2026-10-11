@@ -456,6 +456,7 @@ struct QueueSheet: View {
             .listStyle(.plain)
             .navigationTitle("Queue")
             .navigationBarTitleDisplayMode(.inline)
+            .themedScreen()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
@@ -495,6 +496,7 @@ struct TextEntrySheet: View {
             }
             .navigationTitle("Keyboard")
             .navigationBarTitleDisplayMode(.inline)
+            .themedScreen()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") { dismiss() }

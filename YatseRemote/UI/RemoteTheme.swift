@@ -6,6 +6,8 @@ import SwiftUI
 struct RemoteTheme: Equatable {
     /// Page background, behind everything and visible once artwork is gone.
     var background: Color
+    /// Panels that sit above the background: the drawer, cards, sheets.
+    var surface: Color
     /// Resting fill for a control tile. Deliberately translucent so artwork
     /// behind the remote reads through it.
     var tileFill: Color
@@ -32,20 +34,22 @@ extension RemoteTheme {
     /// Saturated blue, the default.
     static let blue = RemoteTheme(
         background: Color(hex: 0x0D5FB8),
-        tileFill: Color.white.opacity(0.14),
-        tileFillPressed: Color.white.opacity(0.26),
+        surface: Color(hex: 0x0B4C96),
+        tileFill: Color.white.opacity(0.10),
+        tileFillPressed: Color.white.opacity(0.22),
         accent: Color(hex: 0x2F8CFF),
         icon: .white,
-        navBarFill: Color(hex: 0x3D86D8).opacity(0.6),
+        navBarFill: Color(hex: 0x3D86D8).opacity(0.45),
         divider: Color(hex: 0x2F8CFF),
-        barFill: Color(hex: 0x0D5FB8).opacity(0.6),
-        artworkScrim: Color(hex: 0x0D5FB8).opacity(0.4),
+        barFill: Color(hex: 0x0D5FB8).opacity(0.45),
+        artworkScrim: Color(hex: 0x0D5FB8).opacity(0.15),
         tileCornerRadius: 18
     )
 
     /// The original dark remote, kept selectable.
     static let dark = RemoteTheme(
         background: .black,
+        surface: Color(hex: 0x1C1C1E),
         tileFill: Color.white.opacity(0.12),
         tileFillPressed: Color.white.opacity(0.24),
         accent: .orange,
@@ -108,6 +112,30 @@ private struct ThemedRoot: ViewModifier {
 
 extension View {
     func themedRoot() -> some View { modifier(ThemedRoot()) }
+}
+
+/// Paints one screen in the theme: page background, icon/text colour, accent
+/// tint, and a navigation bar that matches instead of showing the system's own
+/// material over the top. Applied to every screen, so the look is one decision
+/// rather than a per-view one. `List`/`Form` keep their own background unless it
+/// is hidden, which is why that is in here too.
+private struct ThemedScreen: ViewModifier {
+    @Environment(\.remoteTheme) private var theme
+
+    func body(content: Content) -> some View {
+        content
+            .scrollContentBackground(.hidden)
+            .background(theme.background)
+            .foregroundStyle(theme.icon)
+            .tint(theme.accent)
+            .toolbarBackground(theme.background, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+    }
+}
+
+extension View {
+    func themedScreen() -> some View { modifier(ThemedScreen()) }
 }
 
 /// A tile that lightens while held. The theme is passed in rather than read

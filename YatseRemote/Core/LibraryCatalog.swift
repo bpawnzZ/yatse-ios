@@ -68,6 +68,17 @@ enum LibrarySection: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The icon this section uses wherever it is offered as a place to go — the
+    /// drawer's favourites rows included.
+    var systemImage: String {
+        switch self {
+        case .movies: return "movieclapper"
+        case .tvshows: return "tv"
+        case .artists: return "headphones"
+        case .albums: return "square.stack"
+        }
+    }
+
     func items(from payload: ListPayload) -> [MediaItem] {
         switch self {
         case .movies: return payload.movies ?? []
@@ -130,6 +141,14 @@ enum ChildrenRequest: Hashable {
         switch self {
         case .episodes: return payload.episodes ?? []
         case .albumsOfArtist: return payload.albums ?? []
+        }
+    }
+
+    /// How to save this drill-down as a favourite.
+    var favoriteTarget: FavoriteTarget {
+        switch self {
+        case .episodes(let tvshowID): return .episodes(tvshowID: tvshowID)
+        case .albumsOfArtist(let artistID): return .albumsOfArtist(artistID: artistID)
         }
     }
 }
