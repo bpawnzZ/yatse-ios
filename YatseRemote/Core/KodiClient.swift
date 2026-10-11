@@ -261,7 +261,7 @@ extension ApplicationProperties {
         volume = lenient(container, .volume, 0)
         muted = lenient(container, .muted, false)
         name = lenient(container, .name, "")
-        versionLabel = lenient(container, .version, VersionLabel(text: ""))
+        versionLabel = lenient(container, .version, VersionLabel(text: "")).text
     }
 }
 
