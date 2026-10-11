@@ -271,6 +271,11 @@ struct MediaItem: Decodable {
     var season = -1
     var episode = -1
     var file = ""
+    var filetype = ""
+
+    /// Directory entries from `Files.GetDirectory` carry a `filetype`; anything
+    /// else is a leaf that can be played.
+    var isDirectory: Bool { filetype == "directory" }
 
     var movieid: Int?
     var tvshowid: Int?
@@ -298,7 +303,7 @@ struct MediaItem: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case id, label, title, type, showtitle, album, artist, thumbnail, fanart
-        case art, year, runtime, playcount, season, episode, file
+        case art, year, runtime, playcount, season, episode, file, filetype
         case movieid, tvshowid, episodeid, artistid, albumid, songid
     }
 }
@@ -322,6 +327,7 @@ extension MediaItem {
         season = lenient(container, .season, -1)
         episode = lenient(container, .episode, -1)
         file = lenient(container, .file, "")
+        filetype = lenient(container, .filetype, "")
         movieid = (try? container.decodeIfPresent(Int.self, forKey: .movieid)) ?? nil
         tvshowid = (try? container.decodeIfPresent(Int.self, forKey: .tvshowid)) ?? nil
         episodeid = (try? container.decodeIfPresent(Int.self, forKey: .episodeid)) ?? nil
@@ -352,6 +358,58 @@ struct ListPayload: Decodable {
     var genres: [MediaItem]?
     var items: [MediaItem]?
     var sources: [MediaItem]?
+    var files: [MediaItem]?
+    var addons: [Addon]?
+}
+
+// MARK: - Add-ons
+
+/// An installed add-on. `enabled` and `broken` are real booleans on Kodi 19+ —
+/// confirmed against Kodi 21.3 (/jsonrpc, Addons.GetAddons) rather than assumed,
+/// because the pre-19 wire format answered with "true"/"false" strings. A string
+/// here falls back to the default rather than failing the page.
+struct Addon: Decodable, Identifiable, Hashable {
+    var addonid = ""
+    var type = ""
+    var name = ""
+    var version = ""
+    var summary = ""
+    var description = ""
+    var thumbnail = ""
+    var author = ""
+    var broken = false
+    var enabled = false
+
+    var id: String { addonid }
+
+    var displayName: String { name.isEmpty ? addonid : name }
+
+    /// The `xbmc.addon.` prefix is noise in a section heading.
+    var typeLabel: String {
+        let trimmed = type.replacingOccurrences(of: "xbmc.addon.", with: "")
+        return trimmed.isEmpty ? "Other" : trimmed.prefix(1).uppercased() + trimmed.dropFirst()
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case addonid, type, name, version, summary, description, thumbnail, author
+        case broken, enabled
+    }
+}
+
+extension Addon {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        addonid = lenient(container, .addonid, "")
+        type = lenient(container, .type, "")
+        name = lenient(container, .name, "")
+        version = lenient(container, .version, "")
+        summary = lenient(container, .summary, "")
+        description = lenient(container, .description, "")
+        thumbnail = lenient(container, .thumbnail, "")
+        author = lenient(container, .author, "")
+        broken = lenient(container, .broken, false)
+        enabled = lenient(container, .enabled, false)
+    }
 }
 
 // MARK: - Artwork

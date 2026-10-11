@@ -201,6 +201,48 @@ final class KodiClient {
         return items
     }
 
+    // MARK: Add-ons and files
+
+    /// Every installed add-on, enabled or not. `enabled` comes back as a real
+    /// boolean on Kodi 19+ (verified live on 21.3), so no filter is needed here
+    /// to see disabled ones.
+    func addons() async throws -> [Addon] {
+        let payload = try await list(
+            method: "Addons.GetAddons",
+            params: [
+                "properties": ["name", "version", "enabled", "summary", "description",
+                               "thumbnail", "author", "broken"],
+            ]
+        )
+        return payload.addons ?? []
+    }
+
+    func setAddonEnabled(addonid: String, enabled: Bool) async throws {
+        _ = try await call(
+            "Addons.SetAddonEnabled",
+            params: ["addonid": addonid, "enabled": enabled],
+            as: IgnoreResult.self
+        )
+    }
+
+    /// The configured media sources — the roots a directory browser starts from.
+    func sources(media: String) async throws -> [MediaItem] {
+        let payload = try await list(method: "Files.GetSources", params: ["media": media])
+        return payload.sources ?? []
+    }
+
+    func directory(_ path: String, media: String) async throws -> [MediaItem] {
+        let payload = try await list(
+            method: "Files.GetDirectory",
+            params: [
+                "directory": path,
+                "media": media,
+                "properties": ["title", "thumbnail", "art", "file", "filetype", "runtime"],
+            ]
+        )
+        return payload.files ?? []
+    }
+
     // MARK: Diagnostics probes
 
     /// Unauthenticated connect: any HTTP response — including 401 — proves the

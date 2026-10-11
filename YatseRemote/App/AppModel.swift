@@ -345,6 +345,35 @@ final class AppModel: ObservableObject {
 
     // MARK: Library
 
+    /// Installed add-ons, for the Addons screen.
+    @MainActor
+    func addons() async throws -> [Addon] {
+        try await client.addons()
+    }
+
+    /// Enabling or disabling an add-on also ends any playback it owns on Kodi,
+    /// so the player state is refreshed rather than assumed unchanged.
+    @MainActor
+    func setAddonEnabled(_ addon: Addon, enabled: Bool) async {
+        do {
+            try await client.setAddonEnabled(addonid: addon.addonid, enabled: enabled)
+            lastError = nil
+            await refresh(light: true)
+        } catch {
+            lastError = error.localizedDescription
+        }
+    }
+
+    @MainActor
+    func sources(media: String) async throws -> [MediaItem] {
+        try await client.sources(media: media)
+    }
+
+    @MainActor
+    func directory(_ path: String, media: String) async throws -> [MediaItem] {
+        try await client.directory(path, media: media)
+    }
+
     @MainActor
     func libraryPage(_ section: LibrarySection, offset: Int, pageSize: Int = 60) async throws
         -> (items: [MediaItem], total: Int) {

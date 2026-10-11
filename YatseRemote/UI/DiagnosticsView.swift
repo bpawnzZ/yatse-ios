@@ -112,6 +112,7 @@ struct DiagnosticsView: View {
                 }
             }
             .navigationTitle("Connection check")
+            .themedScreen()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

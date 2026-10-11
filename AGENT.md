@@ -65,22 +65,53 @@ The UI is host-centric and the player state lives above the navigation stack.
   `PosterTile` + `PosterImage` (2:3) render the grid; `ChildrenView` stays a list.
 - `YatseRemote/UI/Touchpad.swift` — `TouchpadGestureResolver` is pure and
   unit-tested; the view is a thin shell over it.
+- `YatseRemote/UI/RemoteTheme.swift` — **every colour lives here.** `RemoteTheme`
+  tokens (background, surface, tile fill, tile fill pressed, accent, icon, nav bar
+  fill, divider, bar fill, artwork scrim, corner radius) with `.blue` and `.dark`
+  presets. `.themedRoot()` injects the selected preset at the app root
+  (`@AppStorage` key `remoteTheme`, switched from Settings → Appearance) and
+  `.themedScreen()` paints a whole screen — page background, icon colour, accent
+  tint and the navigation bar — so a screen is themed with one line. **Views must
+  not hardcode colours**; read `@Environment(\.remoteTheme)`.
+- `YatseRemote/UI/AddonsScreen.swift` — `Addons.GetAddons` grouped by type with a
+  switch per add-on (`Addons.SetAddonEnabled`). `enabled` is a **real boolean** on
+  Kodi 19+ (confirmed live on 21.3); disabled add-ons must stay listed or the
+  switch could never be turned back on.
+- `FilesScreen` + `DirectoryView` (in `LibraryView.swift`) — `Files.GetSources`
+  → `Files.GetDirectory`; folder entries carry `filetype == "directory"`, leaves
+  carry the `file` path that playback needs.
+- `YatseRemote/Core/Favorites.swift` — `Favorite` / `FavoriteTarget` /
+  `FavoriteStore` (UserDefaults key `yatse.favorites.v1`). A target's `id` is
+  derived from the target itself, so the same place cannot be saved twice and the
+  star buttons know filled-vs-outline. Surfaced as the drawer's Favorites section
+  and the `FavoriteButton` stars on library, drill-down and directory screens;
+  a section favourite switches destination, anything deeper is pushed.
+- **A mistyped SF Symbol name is invisible, not an error.** It draws nothing while
+  the button stays tappable — which is exactly how the Movies shortcut broke (a
+  blank tile that still navigated). `ShellNavigationTests` asserts every
+  `ShellDestination`, `RemoteShortcut` and `LibrarySection` symbol resolves via
+  `UIImage(systemName:)`, and that the shortcut row and the drawer agree on icons —
+  they had drifted into two separate mappings.
 - `YatseRemote/UI/HomeScreen.swift`, `SettingsView.swift`,
-  `PlaceholderScreen.swift` — Home, Settings/About, and the honest placeholder.
+  `PlaceholderScreen.swift` — Home, Settings/About, and the honest placeholder
+  (now only `pvr`; `files` and `addons` are implemented).
 - `HostsView` gained `HostsMode` (`connect` picker vs `manage`) and no longer owns
   a `NavigationStack`; `LibraryView` is now `LibraryView(model:section:onOpenDrawer:)`.
 - **`AppModel.send` is result-agnostic** (`IgnoreResult`): Kodi answers some
   methods with `"OK"` and others with a boolean (`GUI.SetFullscreen`), so a fixed
   `String` decode used to throw `malformedResponse` on half of them.
-- **Remote button rows are APK-faithful**, taken from
+- **Remote button rows** — originally APK-faithful from
   `decompiled/resources/res/layout/fragment_remote.xml` (+ handler `bf/a4.java`):
-  row 1 = Volume-Down, Mute, Volume-Up; row 2 = Back (`remote_return`),
-  Fullscreen (`remote_display`), Info, Keyboard, Context (`remote_context`, which
-  uses the list icon and sends `Input.ExecuteAction contextmenu`). The d-pad is
-  up/left/select/right/down with a bare Back and the touchpad toggle
-  bottom-right. **Yatse's Remote has no subtitle and no queue button** — those are
-  Now Playing-page controls here, now surfaced in the `NowPlayingView` overlay
-  (the `QueueSheet` and playlist `AppModel` methods are no longer unreferenced).
+  row 1 = Volume-Down, Mute, Volume-Up; row 2 = Fullscreen (`remote_display`),
+  Info, Keyboard, Context (`remote_context`, which uses the list icon and sends
+  `Input.ExecuteAction contextmenu`). The 2026-10-11 restyle deliberately moved
+  **Back out of row 2** to a bare `arrow.left` at the bottom-left, and put
+  **Subtitles** in its place (`Player.SetSubtitle next`), so row 2 is now
+  Subtitles / Fullscreen / Info / Keyboard / Context. The d-pad is
+  up/left/select/right/down with chevrons in the accent colour and a tiled select
+  instead of the old floating ring, with the touchpad toggle bottom-right.
+  **Yatse's Remote has no subtitle and no queue button** — those are
+  Now Playing-page controls here, surfaced in the `NowPlayingView` overlay.
 - **A stroked `Circle()` hit-tests only the ring.** The Remote's select control is
   `Circle().strokeBorder(...)`, so it needs `.contentShape(Circle())` or a tap in
   the middle misses. (This was a real on-device bug.)

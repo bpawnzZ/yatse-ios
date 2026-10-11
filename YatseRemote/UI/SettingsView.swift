@@ -38,6 +38,7 @@ struct SettingsView: View {
             }
         }
         .navigationTitle("Settings")
+        .themedScreen()
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
@@ -69,6 +70,7 @@ struct AboutScreen: View {
         }
         .navigationTitle("About / Help")
         .navigationBarTitleDisplayMode(.inline)
+        .themedScreen()
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }

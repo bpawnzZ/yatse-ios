@@ -2,9 +2,9 @@ import SwiftUI
 
 /// A top-level destination in the shell.
 ///
-/// This is the single source of truth for what a destination is called, what
-/// icon it uses, and whether a screen exists for it — the drawer and the
-/// Remote's shortcut strip both read it, so the two cannot drift apart.
+/// This is the single source of truth for what a destination is called and what
+/// icon it uses — the drawer and the Remote's shortcut strip both read it, so
+/// the two cannot drift apart.
 enum ShellDestination: String, CaseIterable, Identifiable {
     case home
     case movies
@@ -37,9 +37,9 @@ enum ShellDestination: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .home: return "house"
-        case .movies: return "film"
+        case .movies: return "movieclapper"
         case .tvShows: return "tv"
-        case .music: return "music.note"
+        case .music: return "headphones"
         case .pvr: return "dot.radiowaves.left.and.right"
         case .files: return "folder"
         case .addons: return "puzzlepiece.extension"
@@ -53,8 +53,11 @@ enum ShellDestination: String, CaseIterable, Identifiable {
     /// placeholder rather than a dead end.
     var isImplemented: Bool {
         switch self {
-        case .home, .movies, .tvShows, .music, .remote, .settings, .about: return true
-        case .pvr, .files, .addons: return false
+        case .home, .movies, .tvShows, .music, .remote, .settings, .about,
+             .addons, .files:
+            return true
+        case .pvr:
+            return false
         }
     }
 
@@ -76,8 +79,10 @@ enum ShellDestination: String, CaseIterable, Identifiable {
     static let secondary: [ShellDestination] = [.settings, .about]
 }
 
-/// The five quick links shown under the Remote's app bar. Four are destinations;
-/// Pictures is a Kodi window command, so it has no shell destination.
+/// The five quick links shown under the Remote's app bar. Four are destinations
+/// and take their name and icon from them; Pictures is a Kodi window command, so
+/// it stands alone. Delegating here is what keeps this row and the drawer from
+/// showing different icons for the same thing.
 enum RemoteShortcut: String, CaseIterable, Identifiable {
     case home
     case movies
@@ -88,23 +93,11 @@ enum RemoteShortcut: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
-        switch self {
-        case .home: return "Home"
-        case .movies: return "Movies"
-        case .tvShows: return "TV Shows"
-        case .music: return "Music"
-        case .pictures: return "Pictures"
-        }
+        destination?.title ?? "Pictures"
     }
 
     var systemImage: String {
-        switch self {
-        case .home: return "house"
-        case .movies: return "clapperboard"
-        case .tvShows: return "tv"
-        case .music: return "headphones"
-        case .pictures: return "photo.stack"
-        }
+        destination?.systemImage ?? "photo.stack"
     }
 
     /// The shell destination this shortcut jumps to, or nil when it is a Kodi
@@ -121,13 +114,17 @@ enum RemoteShortcut: String, CaseIterable, Identifiable {
 }
 
 /// The slide-over navigation drawer: host header with a switcher and keyboard /
-/// mic / search actions, the destination list, then Settings and About.
+/// mic / search actions, the destination list, the saved favourites, then
+/// Settings and About.
 struct AppDrawer: View {
     @EnvironmentObject private var session: Session
     @EnvironmentObject private var store: HostStore
+    @EnvironmentObject private var favorites: FavoriteStore
+    @Environment(\.remoteTheme) private var theme
 
     let selected: ShellDestination
     let onSelect: (ShellDestination) -> Void
+    let onOpenFavorite: (Favorite) -> Void
 
     @State private var showingKeyboard = false
     @State private var showingSearch = false
@@ -142,6 +139,15 @@ struct AppDrawer: View {
                     ForEach(ShellDestination.destinations) { item in
                         itemRow(item)
                     }
+
+                    if !favorites.items.isEmpty {
+                        Divider().padding(.vertical, 8)
+                        sectionLabel("Favorites")
+                        ForEach(favorites.items) { favorite in
+                            favoriteRow(favorite)
+                        }
+                    }
+
                     Divider().padding(.vertical, 8)
                     ForEach(ShellDestination.secondary) { item in
                         itemRow(item)
@@ -152,12 +158,12 @@ struct AppDrawer: View {
         }
         .frame(width: 300)
         .frame(maxHeight: .infinity, alignment: .top)
-        .background(.regularMaterial)
+        .background(theme.surface)
         .sheet(isPresented: $showingKeyboard) {
             if let model = session.model { TextEntrySheet(model: model) }
         }
         .sheet(isPresented: $showingSearch) {
-            PlaceholderSheet(title: "Search", message: "Library search arrives with the library screens.")
+            PlaceholderSheet(title: "Search", message: "Library search is not available in this build.")
         }
         .sheet(isPresented: $showingMic) {
             PlaceholderSheet(title: "Voice input", message: "Voice input is not available in this build.")
@@ -168,8 +174,8 @@ struct AppDrawer: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Circle()
-                    .fill(.tint.opacity(0.25))
-                    .overlay(Image(systemName: "play.circle.fill").foregroundStyle(.tint))
+                    .fill(theme.accent.opacity(0.25))
+                    .overlay(Image(systemName: "play.circle.fill").foregroundStyle(theme.accent))
                     .frame(width: 44, height: 44)
                 Spacer()
                 headerButton("keyboard") { showingKeyboard = true }
@@ -186,9 +192,10 @@ struct AppDrawer: View {
             Image(systemName: symbol)
                 .font(.title3)
                 .frame(width: 40, height: 40)
-                .background(.quaternary, in: Circle())
+                .background(theme.tileFill, in: Circle())
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(symbol)
     }
 
     private var hostSwitcher: some View {
@@ -215,22 +222,63 @@ struct AppDrawer: View {
         }
     }
 
+    private func sectionLabel(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(theme.icon.opacity(0.6))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 2)
+    }
+
     private func itemRow(_ item: ShellDestination) -> some View {
-        Button {
+        row(symbol: item.systemImage,
+            title: item.title,
+            isSelected: item == selected) {
             onSelect(item)
-        } label: {
+        }
+    }
+
+    /// A favourite looks like any other row, but carries its own remove action.
+    private func favoriteRow(_ favorite: Favorite) -> some View {
+        row(symbol: symbol(for: favorite.target),
+            title: favorite.title,
+            isSelected: false) {
+            onOpenFavorite(favorite)
+        }
+        .contextMenu {
+            Button("Remove favorite", role: .destructive) {
+                favorites.remove(favorite)
+            }
+        }
+    }
+
+    private func row(symbol: String,
+                     title: String,
+                     isSelected: Bool,
+                     action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(spacing: 16) {
-                Image(systemName: item.systemImage)
+                Image(systemName: symbol)
                     .frame(width: 24)
-                Text(item.title)
-                Spacer()
+                Text(title)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(item == selected ? AnyShapeStyle(.tint.opacity(0.15)) : AnyShapeStyle(.clear))
+            .background(isSelected ? theme.accent.opacity(0.18) : Color.clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(item == selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+        .foregroundStyle(isSelected ? theme.accent : theme.icon)
+    }
+
+    private func symbol(for target: FavoriteTarget) -> String {
+        switch target {
+        case .section(let raw): return LibrarySection(rawValue: raw)?.systemImage ?? "star"
+        case .episodes: return "list.bullet.rectangle"
+        case .albumsOfArtist: return "square.stack"
+        case .directory: return "folder"
+        }
     }
 }

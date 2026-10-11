@@ -6,7 +6,8 @@ import SwiftUI
 /// The destination is selected by value rather than pushed, because drawer
 /// destinations are top-level — back must not cross the drawer boundary. Giving
 /// the stack an identity of `destination` clears any pushed detail screens when
-/// the destination changes.
+/// the destination changes. Favourites that are *places inside* a destination
+/// (a show's episodes, a folder) are pushed onto this stack instead.
 struct ShellView: View {
     @EnvironmentObject private var session: Session
     @Environment(\.scenePhase) private var scenePhase
@@ -14,6 +15,7 @@ struct ShellView: View {
     @State private var destination: ShellDestination = .remote
     @State private var drawerOpen = false
     @State private var showingNowPlaying = false
+    @State private var pushed: [Favorite] = []
 
     var body: some View {
         if let model = session.model {
@@ -25,8 +27,11 @@ struct ShellView: View {
 
     private func shell(_ model: AppModel) -> some View {
         ZStack(alignment: .leading) {
-            NavigationStack {
+            NavigationStack(path: $pushed) {
                 destinationView(model)
+                    .navigationDestination(for: Favorite.self) { favorite in
+                        favoriteDestination(model, favorite)
+                    }
             }
             .id(destination)
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -46,9 +51,13 @@ struct ShellView: View {
                     .onTapGesture { closeDrawer() }
                     .accessibilityLabel("Close menu")
 
-                AppDrawer(selected: destination, onSelect: select)
-                    .ignoresSafeArea(edges: .vertical)
-                    .transition(.move(edge: .leading))
+                AppDrawer(
+                    selected: destination,
+                    onSelect: select,
+                    onOpenFavorite: { open(model, $0) }
+                )
+                .ignoresSafeArea(edges: .vertical)
+                .transition(.move(edge: .leading))
             }
         }
         .animation(.easeInOut(duration: 0.22), value: drawerOpen)
@@ -72,12 +81,53 @@ struct ShellView: View {
             HomeScreen(model: model, onOpenDrawer: openDrawer, onSelect: select)
         case .movies, .tvShows, .music:
             LibraryView(model: model, section: destination.librarySection ?? .movies, onOpenDrawer: openDrawer)
+        case .files:
+            FilesScreen(model: model, onOpenDrawer: openDrawer)
+        case .addons:
+            AddonsScreen(model: model, onOpenDrawer: openDrawer)
         case .settings:
             SettingsView(onOpenDrawer: openDrawer)
         case .about:
             AboutScreen(onOpenDrawer: openDrawer)
-        case .pvr, .files, .addons:
+        case .pvr:
             PlaceholderScreen(destination: destination, onOpenDrawer: openDrawer)
+        }
+    }
+
+    /// A favourite either switches destination — a library section is a
+    /// destination, not a pushed screen — or pushes the screen that reproduces
+    /// the place it was saved from.
+    private func open(_ model: AppModel, _ favorite: Favorite) {
+        switch favorite.target {
+        case .section(let raw):
+            if let section = LibrarySection(rawValue: raw),
+               let match = ShellDestination.allCases.first(where: { $0.librarySection == section }) {
+                select(match)
+            } else {
+                withAnimation { drawerOpen = false }
+            }
+        case .episodes, .albumsOfArtist, .directory:
+            pushed = [favorite]
+            withAnimation { drawerOpen = false }
+        }
+    }
+
+    @ViewBuilder
+    private func favoriteDestination(_ model: AppModel, _ favorite: Favorite) -> some View {
+        switch favorite.target {
+        case .episodes(let tvshowID):
+            ChildrenView(model: model,
+                         request: .episodes(tvshowID: tvshowID),
+                         heading: favorite.title)
+        case .albumsOfArtist(let artistID):
+            ChildrenView(model: model,
+                         request: .albumsOfArtist(artistID: artistID),
+                         heading: favorite.title)
+        case .directory(let directory):
+            DirectoryView(model: model, path: directory, title: favorite.title)
+        case .section:
+            // A section switches destination; there is nothing to push.
+            EmptyView()
         }
     }
 
@@ -85,6 +135,7 @@ struct ShellView: View {
     private func closeDrawer() { withAnimation { drawerOpen = false } }
 
     private func select(_ item: ShellDestination) {
+        pushed.removeAll()
         destination = item
         withAnimation { drawerOpen = false }
     }

@@ -247,4 +247,85 @@ final class KodiModelTests: XCTestCase {
         XCTAssertEqual(ChildrenRequest.albumsOfArtist(artistID: 7).params["artistid"] as? Int, 7)
         XCTAssertEqual(ChildrenRequest.episodes(tvshowID: 12).method, "VideoLibrary.GetEpisodes")
     }
+
+    // MARK: Add-ons
+
+    /// Captured from the live host (`Addons.GetAddons`, Kodi 21.3), which is how
+    /// we know `enabled` is a real boolean rather than the "true"/"false" string
+    /// older builds sent.
+    static let liveAddons = """
+    {"jsonrpc":"2.0","id":1,"result":{"addons":[
+      {"addonid":"plugin.video.youtube","type":"xbmc.addon.video","enabled":true,
+       "name":"YouTube","version":"7.0.1","summary":"YouTube","description":"d",
+       "thumbnail":"","author":"team","broken":false},
+      {"addonid":"script.module.requests","type":"xbmc.addon.module","enabled":false,
+       "name":"Requests","version":"2.31.0","summary":"s","description":"d",
+       "thumbnail":"","author":"team","broken":false}
+    ],"limits":{"start":0,"end":2,"total":2}}}
+    """
+
+    func testAddonsDecodeTheLiveResponse() throws {
+        let payload = try result(ListPayload.self, from: Self.liveAddons)
+        let addons = try XCTUnwrap(payload.addons)
+        XCTAssertEqual(addons.count, 2)
+
+        let youtube = try XCTUnwrap(addons.first)
+        XCTAssertEqual(youtube.addonid, "plugin.video.youtube")
+        XCTAssertEqual(youtube.displayName, "YouTube")
+        XCTAssertTrue(youtube.enabled)
+        XCTAssertFalse(youtube.broken)
+        XCTAssertEqual(youtube.typeLabel, "Video")
+    }
+
+    /// A disabled add-on must stay in the list and read as disabled — filtering
+    /// it out is what would make the switch impossible to turn back on.
+    func testDisabledAddonDecodesAsDisabledAndKeepsItsType() throws {
+        let payload = try result(ListPayload.self, from: Self.liveAddons)
+        let disabled = try XCTUnwrap(payload.addons?.last)
+        XCTAssertFalse(disabled.enabled)
+        XCTAssertEqual(disabled.typeLabel, "Module")
+        XCTAssertEqual(disabled.displayName, "Requests")
+    }
+
+    func testAddonFieldsAreOptional() throws {
+        // Only addonid is guaranteed; a missing name falls back to the id and a
+        // missing type to a readable heading.
+        let payload = try result(ListPayload.self, from:
+            #"{"jsonrpc":"2.0","id":1,"result":{"addons":[{"addonid":"x.y.z"}],"limits":{"total":1}}}"#)
+        let addon = try XCTUnwrap(payload.addons?.first)
+        XCTAssertEqual(addon.displayName, "x.y.z")
+        XCTAssertEqual(addon.typeLabel, "Other")
+        XCTAssertFalse(addon.enabled)
+    }
+
+    // MARK: Directories
+
+    /// The `Files.GetDirectory` shape from the live host: folders carry
+    /// `filetype: "directory"`, leaves do not, and each entry carries the `file`
+    /// path that both drill-down and playback need.
+    func testDirectoryEntriesReportWhetherTheyAreFolders() throws {
+        let json = """
+        {"jsonrpc":"2.0","id":1,"result":{"files":[
+          {"file":"smb://nas/films/","filetype":"directory","label":"Films","type":"directory"},
+          {"file":"smb://nas/film.mkv","filetype":"file","label":"Film","type":"movie"}
+        ],"limits":{"start":0,"end":2,"total":2}}}
+        """
+        let payload = try result(ListPayload.self, from: json)
+        let files = try XCTUnwrap(payload.files)
+        XCTAssertTrue(files[0].isDirectory)
+        XCTAssertFalse(files[1].isDirectory)
+        XCTAssertEqual(files[0].heading, "Films")
+        XCTAssertEqual(files[1].playableItem?["file"] as? String, "smb://nas/film.mkv")
+    }
+
+    func testSourcesDecodeWithTheirLabel() throws {
+        let json = """
+        {"jsonrpc":"2.0","id":1,"result":{"sources":[
+          {"file":"smb://nas/films/","label":"Films"}
+        ],"limits":{"start":0,"end":1,"total":1}}}
+        """
+        let payload = try result(ListPayload.self, from: json)
+        XCTAssertEqual(payload.sources?.first?.label, "Films")
+        XCTAssertEqual(payload.sources?.first?.file, "smb://nas/films/")
+    }
 }
