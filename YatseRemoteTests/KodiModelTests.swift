@@ -50,6 +50,21 @@ final class KodiModelTests: XCTestCase {
         // Live Kodi sends `currentsubtitle: {}` when no subtitle is selected.
         XCTAssertNotNil(properties.currentsubtitle)
         XCTAssertEqual(properties.currentsubtitle?.index, 0)
+        // The overlay's pickers read these lists; the live box carries one audio
+        // stream and no subtitle streams for this item.
+        XCTAssertEqual(properties.audiostreams.count, 1)
+        XCTAssertEqual(properties.audiostreams.first?.name, "AAC-LC stereo")
+        XCTAssertTrue(properties.subtitles.isEmpty)
+    }
+
+    func testPlayerPropertiesDecodesStreamLists() throws {
+        let properties = try result(PlayerProperties.self, from: #"""
+        {"jsonrpc": "2.0", "result": {"audiostreams": [{"index": 0, "name": "Stereo", "language": "eng"}, {"index": 1, "name": "Commentary", "language": "eng"}], "subtitles": [{"index": 0, "name": "English", "language": "eng", "isdefault": true}]}}
+        """#)
+
+        XCTAssertEqual(properties.audiostreams.map(\.index), [0, 1])
+        XCTAssertEqual(properties.subtitles.map(\.index), [0])
+        XCTAssertEqual(properties.subtitles.first?.language, "eng")
     }
 
     func testPlayerItemFromLiveKodi() throws {
@@ -63,6 +78,17 @@ final class KodiModelTests: XCTestCase {
         XCTAssertEqual(item.artists, [])
         XCTAssertEqual(item.subtitleLine, "")
         XCTAssertNotNil(Artwork.poster(for: item.art, thumbnail: item.thumbnail))
+    }
+
+    func testPlayerItemDecodesPlotYearGenre() throws {
+        let item = try result(ItemPayload.self, from: #"""
+        {"jsonrpc": "2.0", "result": {"item": {"title": "Film", "plot": "A plot.", "year": 1999, "genre": ["Drama", "Comedy"]}}}
+        """#).item
+
+        XCTAssertEqual(item.plot, "A plot.")
+        XCTAssertEqual(item.year, 1999)
+        XCTAssertEqual(item.genre.values, ["Drama", "Comedy"])
+        XCTAssertEqual(item.infoLine, "1999 · Drama · Comedy")
     }
 
     func testApplicationPropertiesUnwrapsVersionObject() throws {
@@ -132,6 +158,8 @@ final class KodiModelTests: XCTestCase {
         XCTAssertEqual(properties.repeatMode, "off")
         XCTAssertNil(properties.time)
         XCTAssertNil(properties.currentaudiostream)
+        XCTAssertTrue(properties.audiostreams.isEmpty)
+        XCTAssertTrue(properties.subtitles.isEmpty)
     }
 
     // MARK: Artwork
@@ -205,6 +233,13 @@ final class KodiModelTests: XCTestCase {
         let payload = try result(ListPayload.self, from: Self.liveMovies)
         XCTAssertEqual(LibrarySection.movies.items(from: payload).count, 1)
         XCTAssertEqual(LibrarySection.tvshows.items(from: payload).count, 0)
+    }
+
+    func testSectionLayoutMapsPosterMediaToGrid() {
+        XCTAssertEqual(LibrarySection.movies.layout, .grid)
+        XCTAssertEqual(LibrarySection.tvshows.layout, .grid)
+        XCTAssertEqual(LibrarySection.artists.layout, .list)
+        XCTAssertEqual(LibrarySection.albums.layout, .list)
     }
 
     func testChildrenRequestsCarryTheirParentID() {

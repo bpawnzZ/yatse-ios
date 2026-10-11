@@ -103,4 +103,43 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertEqual(AppModel.clampedVolume(100), 100)
         XCTAssertEqual(AppModel.clampedVolume(150), 100)
     }
+
+    // MARK: Control-pad sizing
+
+    func testControlPadBoundedByHeightWhenHeightIsSmaller() {
+        XCTAssertEqual(ControlPadMetrics.side(in: CGSize(width: 400, height: 300)), 300)
+        XCTAssertEqual(ControlPadMetrics.side(in: CGSize(width: 400, height: 300), reserved: 56), 244)
+    }
+
+    func testControlPadBoundedByWidthWhenWidthIsSmaller() {
+        XCTAssertEqual(ControlPadMetrics.side(in: CGSize(width: 320, height: 700), reserved: 56), 320)
+    }
+
+    func testControlPadNeverNegative() {
+        XCTAssertEqual(ControlPadMetrics.side(in: CGSize(width: 400, height: 40), reserved: 56), 0)
+        XCTAssertEqual(ControlPadMetrics.side(in: .zero, reserved: 56), 0)
+    }
+
+    // MARK: Now Playing mappings
+
+    func testRepeatModeCyclesOffAllOne() {
+        XCTAssertEqual(RepeatMode.off.next, .all)
+        XCTAssertEqual(RepeatMode.all.next, .one)
+        XCTAssertEqual(RepeatMode.one.next, .off)
+        XCTAssertEqual(RepeatMode.from("nonsense"), .off)
+    }
+
+    func testSubtitleSelectionSendsOffNotIndex() {
+        // "off" must be the string, never index 0 — index 0 is a real stream.
+        XCTAssertEqual(SubtitleSelection.off.payloadValue as? String, "off")
+        XCTAssertEqual(SubtitleSelection.stream(2).payloadValue as? Int, 2)
+        XCTAssertNil(SubtitleSelection.stream(0).payloadValue as? String)
+    }
+
+    func testTimeTextFormatting() {
+        XCTAssertEqual(TimeText.mmss(0), "0:00")
+        XCTAssertEqual(TimeText.mmss(65), "1:05")
+        XCTAssertEqual(TimeText.mmss(3661), "1:01:01")
+        XCTAssertEqual(TimeText.mmss(-5), "0:00")
+    }
 }

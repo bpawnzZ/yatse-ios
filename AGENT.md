@@ -46,7 +46,23 @@ The UI is host-centric and the player state lives above the navigation stack.
 - `YatseRemote/UI/MiniPlayer.swift` — `isVisible(activePlayer:)` is the pure
   visibility rule.
 - `YatseRemote/UI/RemoteScreen.swift` — the rebuilt single-screen Remote (was
-  `RemoteView.swift`). Also holds `QueueSheet` and `TextEntrySheet`.
+  `RemoteView.swift`). Also holds `QueueSheet`, `TextEntrySheet` and the pure
+  `ControlPadMetrics`. **The Remote does not scroll**: status/shortcut/volume/
+  utility rows are pinned and the pad takes `maxHeight: .infinity`;
+  `ControlPadMetrics.side(in:reserved:)` sizes the square pad to
+  `min(width, height − reserved)` so it fills the free space without overflowing
+  (unit-tested, because the number is not visible in CI).
+- `YatseRemote/UI/NowPlayingView.swift` — the full-screen Now Playing overlay,
+  presented from `ShellView` via `.fullScreenCover` (not from `MiniPlayer`; the
+  mini-player stays a pure strip). Holds `NowPlayingInfoView` and the pure
+  `TimeText.mmss`. Stream pickers send each stream's own `index` (never the row
+  offset); subtitles-off sends the string `"off"` via `SubtitleSelection`. The
+  video control sends `Input.ExecuteAction {"action":"aspectratio"}` — confirmed
+  present in the live box's action enum with a read-only `JSONRPC.Introspect`
+  (2026-10-11), so no fallback is used. `QueueSheet` is surfaced here.
+- `YatseRemote/Core/LibraryCatalog.swift` — `LibrarySection.layout`
+  (`grid` for movies/tvshows, `list` for artists/albums) drives `LibraryView`;
+  `PosterTile` + `PosterImage` (2:3) render the grid; `ChildrenView` stays a list.
 - `YatseRemote/UI/Touchpad.swift` — `TouchpadGestureResolver` is pure and
   unit-tested; the view is a thin shell over it.
 - `YatseRemote/UI/HomeScreen.swift`, `SettingsView.swift`,
@@ -63,9 +79,8 @@ The UI is host-centric and the player state lives above the navigation stack.
   uses the list icon and sends `Input.ExecuteAction contextmenu`). The d-pad is
   up/left/select/right/down with a bare Back and the touchpad toggle
   bottom-right. **Yatse's Remote has no subtitle and no queue button** — those are
-  Now Playing-page controls here. `QueueSheet` and the playlist `AppModel` methods
-  are therefore currently unreferenced; they mount on the Now Playing page in a
-  later phase.
+  Now Playing-page controls here, now surfaced in the `NowPlayingView` overlay
+  (the `QueueSheet` and playlist `AppModel` methods are no longer unreferenced).
 - **A stroked `Circle()` hit-tests only the ring.** The Remote's select control is
   `Circle().strokeBorder(...)`, so it needs `.contentShape(Circle())` or a tap in
   the middle misses. (This was a real on-device bug.)

@@ -12,6 +12,7 @@ struct ShellView: View {
 
     @State private var destination: ShellDestination = .remote
     @State private var drawerOpen = false
+    @State private var showingNowPlaying = false
 
     var body: some View {
         if let model = session.model {
@@ -29,7 +30,7 @@ struct ShellView: View {
             .id(destination)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if MiniPlayer.isVisible(activePlayer: model.activePlayer) {
-                    MiniPlayer(model: model) { select(.remote) }
+                    MiniPlayer(model: model) { showingNowPlaying = true }
                 }
             }
 
@@ -45,6 +46,9 @@ struct ShellView: View {
             }
         }
         .animation(.easeInOut(duration: 0.22), value: drawerOpen)
+        .fullScreenCover(isPresented: $showingNowPlaying) {
+            NowPlayingView(model: model)
+        }
     }
 
     @ViewBuilder
