@@ -1,5 +1,17 @@
 import Foundation
 
+/// The outcome of the most recent connection self-check for one host.
+///
+/// `failingLayer` is the `ConnectionLayer.rawValue` of the first failed probe,
+/// or nil when every probe passed. It is deliberately a `String` rather than a
+/// `ConnectionLayer`: it keeps persisted host state decoupled from the
+/// diagnostics module, and `ConnectionLayer` is not `Codable`.
+struct HostCheckSummary: Codable, Hashable {
+    var ok: Bool
+    var failingLayer: String?
+    var date: Date
+}
+
 /// A configured media centre.
 ///
 /// Protocol surface recovered from the Yatse 12.0.0 decompile: JSON-RPC 2.0 over
@@ -14,6 +26,14 @@ struct Host: Codable, Identifiable, Hashable {
     var useTLS = false
     var macAddress = ""
     var wolPort = 9
+
+    /// The most recent self-check result, or nil if this host has never been
+    /// checked. This MUST stay optional: `HostStore.load()` decodes with `try?`,
+    /// so a non-optional field would make every previously-saved host fail to
+    /// decode and silently yield an empty host list. Optional stored properties
+    /// use `decodeIfPresent` under synthesized `Codable`, so pre-change JSON
+    /// (which has no `lastCheck` key) still decodes.
+    var lastCheck: HostCheckSummary? = nil
 
     var displayName: String { name.isEmpty ? address : name }
 
@@ -107,6 +127,15 @@ final class HostStore: ObservableObject {
         } else {
             hosts.append(host)
         }
+        save()
+    }
+
+    /// Records the latest self-check outcome for a saved host, matched by id, and
+    /// persists it. The check is recorded for a host the caller already holds, so
+    /// an unknown id is a no-op rather than an append.
+    func recordCheck(for host: Host, summary: HostCheckSummary) {
+        guard let index = hosts.firstIndex(where: { $0.id == host.id }) else { return }
+        hosts[index].lastCheck = summary
         save()
     }
 
