@@ -10,7 +10,6 @@ struct RemoteScreen: View {
     let onOpenDrawer: () -> Void
     let onSelect: (ShellDestination) -> Void
 
-    @State private var scrubSeconds: Double?
     @State private var showingQueue = false
     @State private var showingKeyboard = false
     @State private var showingCastNotice = false
@@ -46,8 +45,6 @@ struct RemoteScreen: View {
             ScrollView {
                 VStack(spacing: 16) {
                     statusLine
-                    nowPlaying
-                    scrubber
                     shortcutStrip
                     volumeRow
                     utilityRow
@@ -63,6 +60,7 @@ struct RemoteScreen: View {
                 .padding(.horizontal)
                 .padding(.vertical, 12)
             }
+            .scrollDisabled(touchpadEnabled)
         }
         .navigationTitle(model.host.displayName)
         .navigationBarTitleDisplayMode(.inline)
@@ -128,7 +126,7 @@ struct RemoteScreen: View {
         .accessibilityLabel("Power")
     }
 
-    // MARK: Status and now playing
+    // MARK: Status
 
     private var statusLine: some View {
         HStack(spacing: 8) {
@@ -142,60 +140,6 @@ struct RemoteScreen: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer()
-        }
-    }
-
-    private var nowPlaying: some View {
-        HStack(spacing: 12) {
-            ArtworkImage(
-                url: Artwork.poster(for: model.item?.art ?? [:], thumbnail: model.item?.thumbnail ?? ""),
-                username: model.host.username,
-                password: model.password,
-                size: 68
-            )
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.item?.title.isEmpty == false
-                     ? (model.item?.title ?? "")
-                     : (model.item?.label ?? "Nothing playing"))
-                    .font(.headline)
-                    .lineLimit(2)
-                let subtitle = model.item?.subtitleLine ?? ""
-                if !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(12)
-        .background(tileBackground, in: RoundedRectangle(cornerRadius: 14))
-    }
-
-    private var scrubber: some View {
-        VStack(spacing: 2) {
-            Slider(
-                value: Binding(
-                    get: { scrubSeconds ?? model.positionSeconds },
-                    set: { scrubSeconds = $0 }
-                ),
-                in: 0...max(model.durationSeconds, 1)
-            ) { editing in
-                guard !editing, let target = scrubSeconds else { return }
-                scrubSeconds = nil
-                Task { await model.seek(toSeconds: target) }
-            }
-
-            HStack {
-                Text(Self.timeText(scrubSeconds ?? model.positionSeconds))
-                Spacer()
-                Text(Self.timeText(model.durationSeconds))
-            }
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
         }
     }
 
@@ -320,6 +264,7 @@ struct RemoteScreen: View {
             Circle()
                 .strokeBorder(.primary, lineWidth: 3)
                 .frame(width: 78, height: 78)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Select")
@@ -350,16 +295,6 @@ struct RemoteScreen: View {
         } else {
             Task { await model.openInKodi(window: "Pictures") }
         }
-    }
-
-    private static func timeText(_ seconds: Double) -> String {
-        let total = max(0, Int(seconds.rounded()))
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let secs = total % 60
-        return hours > 0
-            ? String(format: "%d:%02d:%02d", hours, minutes, secs)
-            : String(format: "%d:%02d", minutes, secs)
     }
 }
 

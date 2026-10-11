@@ -39,7 +39,7 @@ struct TouchpadSurface: View {
                 }
             )
             .contentShape(RoundedRectangle(cornerRadius: 16))
-            .gesture(
+            .highPriorityGesture(
                 DragGesture(minimumDistance: TouchpadGestureResolver.threshold)
                     .onEnded { value in
                         guard let key = TouchpadGestureResolver.key(forTranslation: value.translation) else { return }
