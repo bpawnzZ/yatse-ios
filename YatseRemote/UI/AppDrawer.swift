@@ -100,10 +100,10 @@ enum RemoteShortcut: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .home: return "house"
-        case .movies: return "film"
+        case .movies: return "clapperboard"
         case .tvShows: return "tv"
-        case .music: return "music.note"
-        case .pictures: return "photo"
+        case .music: return "headphones"
+        case .pictures: return "photo.stack"
         }
     }
 

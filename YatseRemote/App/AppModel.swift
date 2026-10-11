@@ -76,6 +76,7 @@ final class AppModel: ObservableObject {
             startTicker()
         } catch {
             status = .failed(error.localizedDescription)
+            clearPlaybackState()
         }
     }
 
@@ -84,7 +85,26 @@ final class AppModel: ObservableObject {
         ticker?.cancel()
         ticker = nil
         client.stopEventStream()
+        clearPlaybackState()
         status = .idle
+    }
+
+    /// Drops every cached playback value.
+    ///
+    /// Called from each path that means "nothing is playing here" — the active
+    /// player list came back empty, the notification socket closed, a connect
+    /// failed, or the session was disconnected. The mini-player's visibility is
+    /// `activePlayer != nil`, so anything that leaves that value standing keeps
+    /// the bar on screen over stale metadata; that was the stuck-bar bug.
+    ///
+    /// A *transient* poll failure deliberately does not come through here: one
+    /// dropped request while the host is otherwise fine is better left showing a
+    /// second-old value than blanking the bar and blinking it back.
+    @MainActor
+    private func clearPlaybackState() {
+        activePlayer = nil
+        item = nil
+        properties = nil
     }
 
     @MainActor
@@ -109,12 +129,12 @@ final class AppModel: ObservableObject {
             muted = app.muted
 
             let players = try await client.activePlayers()
-            let active = players.first(where: { $0.isVideo }) ?? players.first
-            activePlayer = active
+            activePlayer = Self.resolvedPlayer(answer: players, previous: activePlayer)
 
-            guard let active else {
-                item = nil
-                properties = nil
+            guard let active = activePlayer else {
+                // Nothing is playing: drop the metadata the bar and the artwork
+                // backdrop would otherwise keep showing.
+                clearPlaybackState()
                 if !light { playlist = [] }
                 lastError = nil
                 return
@@ -352,8 +372,16 @@ final class AppModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if event == KodiClient.streamClosedEvent {
+                    // The host stopped talking to us, so whatever the last poll
+                    // saw is no longer known to be true. Without this the bar
+                    // stayed up with stale artwork after Kodi quit or the
+                    // network went away.
+                    self.clearPlaybackState()
                     self.lastError = "Live updates stopped — pull to refresh or reopen the remote."
                 } else {
+                    // Player.OnPlay / OnPause / OnResume / OnStop all land here.
+                    // A stop comes back with an empty player list, which is what
+                    // takes the bar down.
                     await self.refresh(light: true)
                 }
             }
@@ -371,6 +399,18 @@ final class AppModel: ObservableObject {
                 await self.refresh(light: true)
             }
         }
+    }
+}
+
+/// What `activePlayer` should become after a poll. Pure so the rule the
+/// stuck-bar bug broke is unit-testable without a host: an empty answer clears
+/// even when something *was* playing, while a failed poll (`answer == nil`)
+/// keeps the last good value so one dropped request does not blink the bar out.
+/// Video wins when both a video and an audio player are active.
+extension AppModel {
+    static func resolvedPlayer(answer: [ActivePlayer]?, previous: ActivePlayer?) -> ActivePlayer? {
+        guard let answer else { return previous }
+        return answer.first(where: { $0.isVideo }) ?? answer.first
     }
 }
 

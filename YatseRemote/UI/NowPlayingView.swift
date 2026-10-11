@@ -13,7 +13,9 @@ struct NowPlayingView: View {
     @State private var showingInfo = false
     @State private var showingQueue = false
 
-    private let contentColor = Color.white
+    @Environment(\.remoteTheme) private var theme
+
+    private var contentColor: Color { theme.icon }
 
     var body: some View {
         ZStack {
@@ -44,7 +46,7 @@ struct NowPlayingView: View {
         if let url = backdropURL {
             ArtworkBackground(url: url, username: model.host.username, password: model.password)
         } else {
-            Color.black.ignoresSafeArea()
+            theme.background.ignoresSafeArea()
         }
     }
 

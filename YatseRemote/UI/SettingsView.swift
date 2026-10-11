@@ -4,6 +4,7 @@ import SwiftUI
 /// management, and the app version.
 struct SettingsView: View {
     @EnvironmentObject private var session: Session
+    @AppStorage(ThemeName.storageKey) private var theme: ThemeName = .blue
     let onOpenDrawer: () -> Void
 
     var body: some View {
@@ -21,6 +22,15 @@ struct SettingsView: View {
 
             Section("Hosts") {
                 NavigationLink("Manage hosts") { HostsView(mode: .manage) }
+            }
+
+            Section("Appearance") {
+                Picker("Theme", selection: $theme) {
+                    ForEach(ThemeName.allCases) { name in
+                        Text(name.title).tag(name)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
 
             Section("About") {

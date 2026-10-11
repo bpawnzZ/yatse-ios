@@ -94,6 +94,33 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertTrue(MiniPlayer.isVisible(activePlayer: ActivePlayer(playerid: 1, type: "video")))
     }
 
+    // MARK: Playback state resolution
+
+    /// The stuck-bar bug: the bar's visibility is `activePlayer != nil`, so the
+    /// model must resolve an empty player list to nil even when something was
+    /// playing a moment ago. Falling back to the previous player here is what
+    /// left the bar on screen over stale metadata.
+    func testEmptyActivePlayerListClearsTheLastPlayer() {
+        let previous = ActivePlayer(playerid: 0, type: "video")
+        XCTAssertNil(AppModel.resolvedPlayer(answer: [], previous: previous))
+        XCTAssertNil(AppModel.resolvedPlayer(answer: [], previous: nil))
+    }
+
+    /// A dropped request is not a stop: keep the last good value rather than
+    /// blinking the bar out for one failed poll.
+    func testFailedPollKeepsTheLastPlayer() {
+        let previous = ActivePlayer(playerid: 0, type: "video")
+        XCTAssertEqual(AppModel.resolvedPlayer(answer: nil, previous: previous), previous)
+        XCTAssertNil(AppModel.resolvedPlayer(answer: nil, previous: nil))
+    }
+
+    func testVideoPlayerWinsOverAudio() {
+        let audio = ActivePlayer(playerid: 0, type: "audio")
+        let video = ActivePlayer(playerid: 1, type: "video")
+        XCTAssertEqual(AppModel.resolvedPlayer(answer: [audio, video], previous: nil), video)
+        XCTAssertEqual(AppModel.resolvedPlayer(answer: [audio], previous: nil), audio)
+    }
+
     // MARK: Volume clamp
 
     func testVolumeClamp() {
