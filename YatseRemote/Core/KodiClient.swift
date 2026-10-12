@@ -146,6 +146,27 @@ final class KodiClient {
         try await call("Player.GetActivePlayers", as: [ActivePlayer].self)
     }
 
+    /// Kodi's window id for fullscreen playback (`Fullscreen video`).
+    static let fullscreenVideoWindowID = 12005
+
+    /// Whether the box is sitting in fullscreen playback right now — the one state
+    /// where Kodi reads the arrow keys as seeks rather than focus moves.
+    ///
+    /// Two fields, because `fullscreen` stays true while a dialog is open over the
+    /// video, and in a dialog the arrows have to navigate again. The window is the
+    /// discriminator: 12005 is `Fullscreen video`. Verified live on 21.3 with a
+    /// video playing — `fullscreen: true`, `currentwindow: {id: 12005, label:
+    /// "Fullscreen video"}`. Property names here are exact: Kodi rejects the entire
+    /// call with -32602 when one is unknown (verified: `bogusproperty` rejected).
+    func isFullscreenVideo() async throws -> Bool {
+        let payload = try await call(
+            "GUI.GetProperties",
+            params: ["properties": ["fullscreen", "currentwindow"]],
+            as: GUIProperties.self
+        )
+        return payload.fullscreen == true && payload.currentwindow?.id == Self.fullscreenVideoWindowID
+    }
+
     func playerProperties(playerid: Int) async throws -> PlayerProperties {
         try await call(
             "Player.GetProperties",
@@ -382,6 +403,16 @@ final class KodiClient {
               let method = object["method"] as? String else { return nil }
         return method
     }
+}
+
+// MARK: - GUI properties
+
+/// `GUI.GetProperties` — only the fields the seek gate needs.
+struct GUIProperties: Decodable {
+    struct Window: Decodable { let id: Int }
+
+    let fullscreen: Bool?
+    let currentwindow: Window?
 }
 
 // MARK: - Application properties

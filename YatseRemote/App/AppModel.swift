@@ -27,6 +27,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var activePlayer: ActivePlayer?
     @Published private(set) var item: PlayerItem?
     @Published private(set) var properties: PlayerProperties?
+    /// True only while the box is showing fullscreen playback — the seek gate.
+    @Published private(set) var playbackIsFullscreen = false
     @Published private(set) var playlist: [MediaItem] = []
     @Published private(set) var volume = 0
     @Published private(set) var muted = false
@@ -105,6 +107,7 @@ final class AppModel: ObservableObject {
         activePlayer = nil
         item = nil
         properties = nil
+        playbackIsFullscreen = false
     }
 
     @MainActor
@@ -142,8 +145,13 @@ final class AppModel: ObservableObject {
 
             async let propertiesCall = client.playerProperties(playerid: active.playerid)
             async let itemCall = client.currentItem(playerid: active.playerid)
+            async let fullscreenCall = client.isFullscreenVideo()
             properties = try await propertiesCall
             item = try await itemCall
+            // A failed probe keeps the last answer rather than assuming the video
+            // went windowed: sending navigation where the user expected a seek (or
+            // the reverse) is worse than a gate one tick stale.
+            playbackIsFullscreen = (try? await fullscreenCall) ?? playbackIsFullscreen
             if !light { await loadPlaylist() }
             lastError = nil
         } catch {
@@ -185,7 +193,32 @@ final class AppModel: ObservableObject {
     /// (`Input.ExecuteAction` call sites).
     @MainActor
     func key(_ action: String, times: Int = 1) async {
-        await send("Input.ExecuteAction", ["action": action], times: times)
+        let sent = Self.actionForPlayback(action, seeking: isSeeking)
+        await send("Input.ExecuteAction", ["action": sent], times: times)
+    }
+
+    /// Something is playing *and* the box is showing it fullscreen.
+    var isSeeking: Bool { playerid != nil && playbackIsFullscreen }
+
+    /// Fullscreen playback is the one context where Kodi reads the arrow keys as
+    /// seeks, so left/right become the step actions there.
+    ///
+    /// The escalation — 10s, then 30s, 1min, 3min, 5min as the presses repeat — is
+    /// Kodi's own progressive jump, the same one it gives a keyboard, so the app
+    /// sends the step action once per press and keeps no ladder of its own. (`left`
+    /// and `right` are the *actions*, not the keys, which is why they navigate
+    /// rather than seek: the keymap binds arrow keys to the step actions in
+    /// Fullscreen video, and an action bypasses that binding.)
+    ///
+    /// `up`, `down` and `select` keep their meaning everywhere, so this cannot
+    /// strand navigation while a video plays on in the background.
+    static func actionForPlayback(_ action: String, seeking: Bool) -> String {
+        guard seeking else { return action }
+        switch action {
+        case TouchKey.left.rawValue: return "stepback"
+        case TouchKey.right.rawValue: return "stepforward"
+        default: return action
+        }
     }
 
     @MainActor

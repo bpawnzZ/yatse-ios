@@ -312,6 +312,30 @@ final class ShellNavigationTests: XCTestCase {
         )
     }
 
+    // MARK: Seek on the arrows
+
+    /// Fullscreen playback is the one context where left/right seek instead of
+    /// moving focus — and it is what turns a multi-step swipe into real distance
+    /// through the film. Kodi owns the escalation (10s → 30s → 1min → 3min → 5min);
+    /// the app only has to name the step action.
+    func testFullscreenPlaybackTurnsTheArrowsIntoSeekSteps() {
+        XCTAssertEqual(AppModel.actionForPlayback("left", seeking: true), "stepback")
+        XCTAssertEqual(AppModel.actionForPlayback("right", seeking: true), "stepforward")
+    }
+
+    func testArrowsNavigateWhenNotFullscreen() {
+        XCTAssertEqual(AppModel.actionForPlayback("left", seeking: false), "left")
+        XCTAssertEqual(AppModel.actionForPlayback("right", seeking: false), "right")
+    }
+
+    /// A video playing fullscreen is no reason for up/down to stop moving or for
+    /// select to stop selecting — seeking must not swallow the rest of the pad.
+    func testSeekingLeavesEveryOtherActionAlone() {
+        for action in ["up", "down", "select"] {
+            XCTAssertEqual(AppModel.actionForPlayback(action, seeking: true), action)
+        }
+    }
+
     // MARK: Scroll memory
 
     func testNothingIsRememberedForAPlaceNeverScrolled() {
