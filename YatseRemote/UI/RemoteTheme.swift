@@ -26,6 +26,9 @@ struct RemoteTheme: Equatable {
     /// Tint laid over the blurred artwork so icons stay readable without the
     /// artwork being blacked out.
     var artworkScrim: Color
+    /// Blur radius on the artwork backdrop. Lower = the artwork stays legible
+    /// behind the remote instead of reading as a coloured wash.
+    var artworkBlur: CGFloat
     /// Corner radius shared by every tile.
     var tileCornerRadius: CGFloat
 }
@@ -42,7 +45,8 @@ extension RemoteTheme {
         navBarFill: Color(hex: 0x3D86D8).opacity(0.45),
         divider: Color(hex: 0x2F8CFF),
         barFill: Color(hex: 0x0D5FB8).opacity(0.45),
-        artworkScrim: Color(hex: 0x0D5FB8).opacity(0.15),
+        artworkScrim: Color(hex: 0x0D5FB8).opacity(0.05),
+        artworkBlur: 12,
         tileCornerRadius: 18
     )
 
@@ -58,6 +62,7 @@ extension RemoteTheme {
         divider: Color.white.opacity(0.25),
         barFill: Color(hex: 0x111111).opacity(0.92),
         artworkScrim: Color.black.opacity(0.5),
+        artworkBlur: 30,
         tileCornerRadius: 12
     )
 }

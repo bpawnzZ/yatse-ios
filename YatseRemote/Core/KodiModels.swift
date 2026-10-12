@@ -286,7 +286,7 @@ struct MediaItem: Decodable {
 
     var artists: [String] { artist.values }
 
-    var heading: String { title.isEmpty ? label : title }
+    var heading: String { (title.isEmpty ? label : title).strippingKodiMarkup }
 
     var detailLine: String {
         if !showtitle.isEmpty {
@@ -362,6 +362,23 @@ struct ListPayload: Decodable {
     var addons: [Addon]?
 }
 
+// MARK: - Kodi text markup
+
+extension String {
+    /// Plugin listings come back with Kodi's own markup in the label — the live
+    /// YouTube addon answers `[B]My Subscriptions[/B]`. Stripped for display.
+    ///
+    /// Restricted to real Kodi tags rather than any `[word]`, so a title that
+    /// legitimately contains brackets (`[REC]`) survives.
+    var strippingKodiMarkup: String {
+        replacingOccurrences(
+            of: #"\[/?(?:B|I|U|S|CR|COLOR|LIGHT|LOWERCASE|UPPERCASE|CAPITALIZE|FONT|SIZE|URL|IMG)[^\]]*\]"#,
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
+    }
+}
+
 // MARK: - Add-ons
 
 /// An installed add-on. `enabled` and `broken` are real booleans on Kodi 19+ —
@@ -384,11 +401,25 @@ struct Addon: Decodable, Identifiable, Hashable {
 
     var displayName: String { name.isEmpty ? addonid : name }
 
-    /// The `xbmc.addon.` prefix is noise in a section heading.
+    /// The `xbmc.addon.*` prefix is noise in a list heading.
     var typeLabel: String {
         let trimmed = type.replacingOccurrences(of: "xbmc.addon.", with: "")
         return trimmed.isEmpty ? "Other" : trimmed.prefix(1).uppercased() + trimmed.dropFirst()
     }
+
+    /// Add-on types whose content Kodi exposes as a browsable virtual path.
+    ///
+    /// Verified against the live box: `Files.GetDirectory` on
+    /// `plugin://<addonid>/` returns real entries for plugin sources (the YouTube
+    /// addon answered 21 of them). A skin, scraper or font has no such tree, so
+    /// offering to browse one would only produce Kodi's error.
+    var isBrowsable: Bool {
+        ["xbmc.python.pluginsource", "xbmc.addon.video", "xbmc.addon.audio",
+         "xbmc.addon.image", "kodi.addon.game"].contains(type)
+    }
+
+    /// Where this add-on's content lives, for `Files.GetDirectory`.
+    var browsePath: String { "plugin://\(addonid)/" }
 
     enum CodingKeys: String, CodingKey {
         case addonid, type, name, version, summary, description, thumbnail, author
