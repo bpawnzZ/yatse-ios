@@ -303,6 +303,20 @@ rather than re-guess; the harnesses are listed below.
   is why the add-on enable/disable action moved into the long-press menu; that is
   also the only remaining way to re-enable a disabled add-on, so it must not be
   dropped again.
+- **A screen pushed inside a destination must be pushed by value.**
+  `NavigationLink { Destination }` (the closure form) never enters `pushed`, and
+  `.id(destination)` rebuilds the stack on every destination switch — so a
+  closure-built screen is discarded and `NavigationMemory` has nothing to restore.
+  This repo shipped that bug: the drill-downs were all closure-form, so only
+  favourites (the single value push) came back. Every drill-down — library rows
+  and grid cells, Files sources, add-on content and nested folders — is now
+  `NavigationLink(value: Favorite…)` against the one
+  `navigationDestination(for: Favorite.self)`. Add a new one the closure way and
+  it silently stops remembering its place.
+  Ceiling: a pushed value's identity is the *target*, so a folder reached twice in
+  one stack carries a duplicate value. Untested on device — if a push into an
+  already-pushed folder ever does nothing, that is this, and the fix is a
+  push-scoped wrapper type around `Favorite` rather than the stored value itself.
 
 ## Known open defect (not fixed on purpose)
 
