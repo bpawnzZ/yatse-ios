@@ -8,6 +8,7 @@ struct LibraryView: View {
     @ObservedObject var model: AppModel
     let section: LibrarySection
     var onOpenDrawer: (() -> Void)? = nil
+    var onOpenRemote: (() -> Void)? = nil
 
     @Environment(\.scrollMemory) private var scrollMemory
     /// The layout every browse screen shares — see `ViewMode`.
@@ -40,6 +41,7 @@ struct LibraryView: View {
                 }
             }
             ToolbarItemGroup(placement: .primaryAction) {
+                if let onOpenRemote { RemoteJumpButton(onOpen: onOpenRemote) }
                 ViewModeMenu()
                 Button {
                     Task { await reload() }
@@ -291,6 +293,7 @@ struct FavoritesScreen: View {
     @ObservedObject var model: AppModel
     let onOpenDrawer: () -> Void
     let onOpen: (Favorite) -> Void
+    var onOpenRemote: (() -> Void)? = nil
 
     @EnvironmentObject private var favorites: FavoriteStore
     @Environment(\.scrollMemory) private var scrollMemory
@@ -321,7 +324,10 @@ struct FavoritesScreen: View {
                 Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
                     .accessibilityLabel("Open menu")
             }
-            ToolbarItem(placement: .primaryAction) { ViewModeMenu() }
+            ToolbarItemGroup(placement: .primaryAction) {
+                if let onOpenRemote { RemoteJumpButton(onOpen: onOpenRemote) }
+                ViewModeMenu()
+            }
         }
         .themedScreen()
         // The grid is drawn from the store, so the content is there on the first
@@ -390,6 +396,7 @@ struct ChildrenView: View {
     @ObservedObject var model: AppModel
     let request: ChildrenRequest
     var onOpenDrawer: (() -> Void)? = nil
+    var onOpenRemote: (() -> Void)? = nil
 
     @Environment(\.scrollMemory) private var scrollMemory
     /// The layout every browse screen shares — see `ViewMode`.
@@ -426,7 +433,10 @@ struct ChildrenView: View {
                         .accessibilityLabel("Open menu")
                 }
             }
-            ToolbarItem(placement: .primaryAction) { ViewModeMenu() }
+            ToolbarItemGroup(placement: .primaryAction) {
+                if let onOpenRemote { RemoteJumpButton(onOpen: onOpenRemote) }
+                ViewModeMenu()
+            }
         }
         .themedScreen()
         .task {
@@ -493,6 +503,7 @@ struct ChildrenView: View {
 struct FilesScreen: View {
     @ObservedObject var model: AppModel
     let onOpenDrawer: () -> Void
+    var onOpenRemote: (() -> Void)? = nil
 
     /// The layout every browse screen shares — see `ViewMode`.
     @AppStorage(ViewMode.storageKey) private var mode = ViewMode.fallback
@@ -526,6 +537,7 @@ struct FilesScreen: View {
                     .accessibilityLabel("Open menu")
             }
             ToolbarItemGroup(placement: .primaryAction) {
+                if let onOpenRemote { RemoteJumpButton(onOpen: onOpenRemote) }
                 ViewModeMenu()
                 Button {
                     Task { await load() }
@@ -592,6 +604,7 @@ struct DirectoryView: View {
     let path: String
     let title: String
     var onOpenDrawer: (() -> Void)? = nil
+    var onOpenRemote: (() -> Void)? = nil
 
     @Environment(\.scrollMemory) private var scrollMemory
     /// The layout every browse screen shares — see `ViewMode`. It used to be
@@ -620,7 +633,10 @@ struct DirectoryView: View {
                         .accessibilityLabel("Open menu")
                 }
             }
-            ToolbarItem(placement: .primaryAction) { ViewModeMenu() }
+            ToolbarItemGroup(placement: .primaryAction) {
+                if let onOpenRemote { RemoteJumpButton(onOpen: onOpenRemote) }
+                ViewModeMenu()
+            }
         }
         .themedScreen()
         .task {

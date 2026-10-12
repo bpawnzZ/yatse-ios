@@ -16,6 +16,7 @@ import SwiftUI
 struct AddonsScreen: View {
     @ObservedObject var model: AppModel
     let onOpenDrawer: () -> Void
+    var onOpenRemote: (() -> Void)? = nil
 
     @Environment(\.scrollMemory) private var scrollMemory
     /// The layout every browse screen shares — see `ViewMode`.
@@ -49,6 +50,7 @@ struct AddonsScreen: View {
                     .accessibilityLabel("Open menu")
             }
             ToolbarItemGroup(placement: .primaryAction) {
+                if let onOpenRemote { RemoteJumpButton(onOpen: onOpenRemote) }
                 ViewModeMenu()
                 Button {
                     Task { await load() }
