@@ -36,6 +36,14 @@ struct HostsView: View {
 
     var body: some View {
         List {
+            if let failure = session.launchFailure {
+                Section {
+                    Label(failure, systemImage: "exclamationmark.triangle")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+            }
+
             if !store.hosts.isEmpty {
                 Section("Saved hosts") {
                     ForEach(store.hosts) { host in
