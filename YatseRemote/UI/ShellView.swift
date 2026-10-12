@@ -77,13 +77,19 @@ struct ShellView: View {
         case .home:
             HomeScreen(model: model, onOpenDrawer: openDrawer, onSelect: select)
         case .movies, .tvShows, .music:
-            LibraryView(model: model, section: destination.librarySection ?? .movies, onOpenDrawer: openDrawer)
+            LibraryView(model: model,
+                        section: destination.librarySection ?? .movies,
+                        onOpenDrawer: openDrawer,
+                        onOpenRemote: { select(.remote) })
         case .files:
-            FilesScreen(model: model, onOpenDrawer: openDrawer)
+            FilesScreen(model: model, onOpenDrawer: openDrawer, onOpenRemote: { select(.remote) })
         case .addons:
-            AddonsScreen(model: model, onOpenDrawer: openDrawer)
+            AddonsScreen(model: model, onOpenDrawer: openDrawer, onOpenRemote: { select(.remote) })
         case .favorites:
-            FavoritesScreen(model: model, onOpenDrawer: openDrawer, onOpen: { open(model, $0) })
+            FavoritesScreen(model: model,
+                            onOpenDrawer: openDrawer,
+                            onOpen: { open(model, $0) },
+                            onOpenRemote: { select(.remote) })
         case .settings:
             SettingsView(onOpenDrawer: openDrawer)
         case .about:
@@ -120,14 +126,17 @@ struct ShellView: View {
         case .episodes(let tvshowID):
             ChildrenView(model: model,
                          request: .episodes(tvshowID: tvshowID),
-                         onOpenDrawer: openDrawer)
+                         onOpenDrawer: openDrawer,
+                         onOpenRemote: { select(.remote) })
         case .albumsOfArtist(let artistID):
             ChildrenView(model: model,
                          request: .albumsOfArtist(artistID: artistID),
-                         onOpenDrawer: openDrawer)
+                         onOpenDrawer: openDrawer,
+                         onOpenRemote: { select(.remote) })
         case .directory(let directory):
             DirectoryView(model: model, path: directory, title: favorite.title,
-                          onOpenDrawer: openDrawer)
+                          onOpenDrawer: openDrawer,
+                          onOpenRemote: { select(.remote) })
         case .section:
             // A section switches destination; there is nothing to push.
             EmptyView()
@@ -150,6 +159,22 @@ struct ShellView: View {
             destination = item
         }
         withAnimation { drawerOpen = false }
+    }
+}
+
+/// The toolbar control that returns to the Remote from a browse screen.
+///
+/// One definition, and its mark is taken from `ShellDestination.remote` rather
+/// than written out as a symbol name: a literal copy of an icon is how this
+/// project once shipped an invisible Movies tile.
+struct RemoteJumpButton: View {
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            Image(systemName: ShellDestination.remote.systemImage)
+        }
+        .accessibilityLabel("Remote")
     }
 }
 
