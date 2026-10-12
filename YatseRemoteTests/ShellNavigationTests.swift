@@ -262,6 +262,56 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertEqual(TouchpadGestureResolver.action(forTranslation: CGSize(width: 4, height: 120)), .down)
     }
 
+    // MARK: Touchpad step count
+
+    /// How many key presses one swipe is worth. Written against `pointsPerStep`
+    /// rather than against a hard-coded number, so retuning the sensitivity does
+    /// not fail the tests that describe the shape of the mapping.
+
+    func testTouchpadStepsScaleWithSwipeLength() {
+        let step = TouchpadGestureResolver.pointsPerStep
+        XCTAssertEqual(TouchpadGestureResolver.steps(forTranslation: CGSize(width: step, height: 2)), 1)
+        XCTAssertEqual(TouchpadGestureResolver.steps(forTranslation: CGSize(width: step * 3, height: 2)), 3)
+        // The dominant axis decides, exactly as it does for the key itself.
+        XCTAssertEqual(TouchpadGestureResolver.steps(forTranslation: CGSize(width: 2, height: -step * 2)), 2)
+    }
+
+    /// Same distance, released faster, has to move further — that is the whole
+    /// point of reading speed as well as length.
+    func testTouchpadFlickAddsStepsForTheSameTravel() {
+        let travelled = CGSize(width: 120, height: 6)
+        let slow = TouchpadGestureResolver.steps(forTranslation: travelled, predictedEnd: travelled)
+        let flick = TouchpadGestureResolver.steps(
+            forTranslation: travelled,
+            predictedEnd: CGSize(width: 320, height: 6)
+        )
+        XCTAssertGreaterThan(flick, slow)
+        XCTAssertGreaterThanOrEqual(flick, 5)
+    }
+
+    func testTouchpadStepsAreCapped() {
+        let huge = TouchpadGestureResolver.steps(
+            forTranslation: CGSize(width: 4_000, height: 0),
+            predictedEnd: CGSize(width: 9_000, height: 0)
+        )
+        XCTAssertEqual(huge, TouchpadGestureResolver.stepCap)
+    }
+
+    /// A tap is `select`, and a select has to land exactly once: repeating it
+    /// would open whatever is under the finger and then immediately open it again.
+    /// A fast tap has a large projected end, so the tap branch must decide on
+    /// travel alone.
+    func testTouchpadTapSelectsExactlyOnce() {
+        XCTAssertEqual(TouchpadGestureResolver.steps(forTranslation: .zero), 1)
+        XCTAssertEqual(
+            TouchpadGestureResolver.steps(
+                forTranslation: CGSize(width: 6, height: -4),
+                predictedEnd: CGSize(width: 400, height: 300)
+            ),
+            1
+        )
+    }
+
     // MARK: Scroll memory
 
     func testNothingIsRememberedForAPlaceNeverScrolled() {

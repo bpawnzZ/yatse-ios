@@ -13,6 +13,14 @@ enum TouchpadGestureResolver {
     /// the two cannot disagree and leave a dead zone.
     static let threshold: CGFloat = 24
 
+    /// Travel that buys one key press. The sensitivity knob: lower it and a short
+    /// drag travels further.
+    static let pointsPerStep: CGFloat = 52
+
+    /// Ceiling on one gesture, so a hard flick cannot fire an unbounded burst of
+    /// keys at the box.
+    static let stepCap = 8
+
     static func key(forTranslation translation: CGSize, threshold: CGFloat = 24) -> TouchKey? {
         let dx = translation.width
         let dy = translation.height
@@ -31,6 +39,30 @@ enum TouchpadGestureResolver {
     /// `TouchpadSurface` sends whatever this returns.
     static func action(forTranslation translation: CGSize, threshold: CGFloat = 24) -> TouchKey {
         key(forTranslation: translation, threshold: threshold) ?? .select
+    }
+
+    /// How many times the surface should issue that key.
+    ///
+    /// Distance alone is not enough. A flick crosses the whole surface with barely
+    /// any travel and ought to move further than a slow drag of the same length, so
+    /// the count comes from distance plus speed — speed read as the gap between
+    /// where the finger stopped and where `predictedEnd` says it would have
+    /// coasted. Both terms are in points, so they add. (`DragGesture.Value.velocity`
+    /// says it in points per second instead, but it postdates this app's iOS 17
+    /// floor, so it would need an availability check for no gain.)
+    ///
+    /// A tap stays exactly one press: repeating a `select` would open whatever is
+    /// under the finger and then immediately open it again.
+    static func steps(forTranslation translation: CGSize, predictedEnd: CGSize? = nil) -> Int {
+        let travelled = dominantAxis(translation)
+        guard travelled >= threshold else { return 1 }
+        let coasted = predictedEnd.map { dominantAxis($0) } ?? travelled
+        let effective = travelled + max(0, coasted - travelled)
+        return min(stepCap, max(1, Int((effective / pointsPerStep).rounded())))
+    }
+
+    private static func dominantAxis(_ size: CGSize) -> CGFloat {
+        max(abs(size.width), abs(size.height))
     }
 }
 
@@ -61,7 +93,11 @@ struct TouchpadSurface: View {
                 DragGesture(minimumDistance: 0)
                     .onEnded { value in
                         let key = TouchpadGestureResolver.action(forTranslation: value.translation)
-                        Task { await model.key(key.rawValue) }
+                        let steps = TouchpadGestureResolver.steps(
+                            forTranslation: value.translation,
+                            predictedEnd: value.predictedEndTranslation
+                        )
+                        Task { await model.key(key.rawValue, times: steps) }
                     }
             )
     }
