@@ -10,6 +10,10 @@
 — an unsigned IPA you re-sign with your own Apple ID. No developer account, no
 App Store, every feature unlocked.
 
+A Kodi remote for your pocket: it finds your box, remembers it, and hands you the
+library, the playback controls and the remote itself. No account, no server in the
+middle, nothing held back.
+
 > ## Unofficial — a personal build
 >
 > This is **not an official app**, and not an official build of anything. It is one
@@ -50,16 +54,25 @@ See [`docs/CLEANROOM.md`](docs/CLEANROOM.md) for what was and was not taken.
 
 ## Screenshots
 
-The Remote. The drawer control stays pinned top-left, including on the screens
-pushed inside a destination, so you can leave a folder for the Remote without
-first going back to the top:
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="docs/screenshots/remote.jpg"><img src="docs/screenshots/remote.jpg" width="330" alt="The Remote screen"></a>
+    </td>
+    <td align="center" width="50%">
+      <a href="docs/screenshots/drawer.jpg"><img src="docs/screenshots/drawer.jpg" width="330" alt="The drawer open"></a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>The Remote</b><br>One screen, no tabs: status, shortcuts, volume, the d-pad, and a bare Back arrow.</sub></td>
+    <td align="center"><sub><b>The drawer</b><br>Every destination, with a host header and a switcher. Favorites lives here.</sub></td>
+  </tr>
+</table>
 
-![The Remote screen](docs/screenshots/remote.jpg)
-
-The drawer. Favorites is a destination, and each destination remembers the place
-you last reached inside it for the session:
-
-![The drawer open](docs/screenshots/drawer.jpg)
+Tap either one for the full-size image. The drawer control stays pinned top-left,
+including on the screens pushed inside a destination, so you can leave a folder for
+the Remote without first going back to the top — and every browse screen now carries
+a Remote button of its own, in the toolbar next to the layout control.
 
 ## What it does
 
@@ -67,15 +80,17 @@ you last reached inside it for the session:
 |---|---|
 | Hosts | add / edit / delete, Basic auth, password in Keychain, HTTP or HTTPS, Wake-on-LAN (MAC + port) |
 | Discovery | Bonjour `_xbmc-jsonrpc-h._tcp` / `_xbmc-jsonrpc._tcp` |
+| Launch | reconnects to the last host you used; if it has gone or does not answer, the picker comes back with the reason |
 | Now playing | full-screen overlay opened from the mini-player: see-through artwork backdrop, a seek slider with elapsed/duration, and Info |
 | Transport | previous / rewind / play-pause / forward / next / stop in the Now Playing overlay; back, fullscreen, info, keyboard and context tiles on the remote |
 | Streams | audio-stream and subtitle pickers (including subtitles off) and a video-zoom control, in the Now Playing overlay |
-| Shell | host-centric: slide-out drawer (Home, Movies, TV Shows, Music, Pvr, Files, Addons, Favorites, Remote, then Settings and About) with a host header and switcher, and a persistent mini-player while a player is active |
+| Shell | host-centric: slide-out drawer (Home, Movies, TV Shows, Music, Pvr, Files, Addons, Favorites, Remote, then Settings and About) with a host header and switcher, a persistent mini-player while a player is active, and a Remote button on every browse screen's toolbar |
 | Remote | one screen (no tabs): pinned status, shortcut, volume and utility tile rows; a directional pad that fills the screen below them (accent arrows, outlined select), a bare Back control and a touchpad toggle; keyboard text entry; the current item's artwork as a blurred background with translucent tiles while playing |
 | Queue | playlist jump / remove / clear, shown in the Now Playing overlay |
-| Library | Movies and TV Shows as a two-column poster grid; Artists → Albums and Episodes as lists; paged at 60 rows, tap to play |
-| Addons | video add-ons only, as a two-column poster grid; tapping one browses the content it exposes on the host, also as a grid; long-press to enable/disable it or save it as a favourite |
-| Favorites | saved places as a two-column poster grid carrying their artwork; saved by long-pressing a folder inside a video add-on, removed by long-pressing the tile |
+| Library | Movies and TV Shows, Artists → Albums, and a show's episodes; paged at 60 rows, tap to play |
+| Layout | one app-wide setting — **2-wide grid, the default**, or 3-wide, 4-wide and a list — switched from any browse screen's toolbar and remembered across launches |
+| Addons | video add-ons only; tapping one browses the content it exposes on the host; long-press to enable/disable it or save it as a favourite |
+| Favorites | saved places carrying their artwork; added and removed by long press only, on a show, artist, add-on, folder or Files source |
 | Status | connection state, server name + version, in-app error surface |
 | Self-check | ordered, read-only, per-layer connection diagnostic with a copyable redacted report and persisted per-host status |
 
@@ -84,7 +99,9 @@ you last reached inside it for the session:
 The app is host-centric. Before a host is chosen it shows the host picker; once
 one is active the root becomes a shell scoped to that host, and player state is
 owned by an app-level `Session` (not by a screen), so playback and the live event
-stream survive moving between destinations.
+stream survive moving between destinations. **At launch it reconnects to the last
+host you used**, so opening the app puts you straight back in the shell for your box
+rather than at a list you have to read.
 
 - **Drawer** — a slide-over list with a host header (name, switcher, keyboard /
   mic / search actions) and the destinations above, Favorites among them.
@@ -104,18 +121,26 @@ stream survive moving between destinations.
   tiles, then a directional pad that fills every point left on the screen, with a
   bare Back arrow and a touchpad toggle beneath it. While something plays, the
   item's artwork is the blurred background and the tiles turn translucent.
-- **Library** — Movies and TV Shows browse as a two-column poster grid; Artists
-  and Albums, and a show's episodes, browse as lists.
+- **Library** — Movies and TV Shows, Artists → Albums, and a show's episodes.
+- **Layout** — one app-wide setting rather than a per-screen one, because these are
+  all the same kind of screen: **2-wide grid (the default)**, 3-wide, 4-wide, or a
+  list. It is switched from the toolbar of any browse screen, applies to every one
+  of them, and is remembered across launches. Tiles give up their detail line as they
+  get denser, so four across stays readable.
 - **Addons** — the video add-ons installed on the host, as a poster grid. Tapping
   one browses the content it exposes at `plugin://<addonid>/`, presented the same
-  way (add-on content is a grid, a filesystem folder stays a list). A long press
-  offers enabling/disabling the add-on and saving it as a favourite.
-- **Favorites** — the places you saved, as a poster grid with their artwork. A
-  favourite is added by long-pressing a folder inside a video add-on, and removed
-  by long-pressing its tile. The drawer no longer lists one row per favourite.
-- **Not on every screen** — the drawer control is on the destinations and on the
-  screens pushed inside them, so you can leave a folder for the Remote without
-  first going back to the top.
+  way. A long press offers enabling/disabling the add-on and saving it as a
+  favourite.
+- **Favorites** — the places you saved, carrying their artwork. **A favourite is
+  added and removed by long press only**: long-press a show, artist, add-on, folder
+  or Files source to save it, long-press its tile to remove it. A file is never
+  offered, because a favourite names a place you can come back to. The drawer no
+  longer lists one row per favourite.
+- **Return to the Remote** — a Remote button sits in every browse screen's toolbar,
+  immediately left of the layout control, so the Remote is one tap away instead of a
+  trip through the drawer. It takes the same path the drawer row does, so the folder
+  you were in is still remembered when you come back to it. The drawer control itself
+  stays on the destinations and on the screens pushed inside them.
 - **Not implemented** — Pvr shows a placeholder naming the destination rather than
   a dead end.
 
