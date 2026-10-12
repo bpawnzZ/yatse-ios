@@ -84,7 +84,7 @@ struct ArtworkBackground: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
-            .blur(radius: 30)
+            .blur(radius: theme.artworkBlur)
             .overlay(theme.artworkScrim)
             .ignoresSafeArea()
         }

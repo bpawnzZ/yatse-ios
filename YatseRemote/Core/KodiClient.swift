@@ -231,13 +231,22 @@ final class KodiClient {
         return payload.sources ?? []
     }
 
+    /// Fields `Files.GetDirectory` accepts.
+    ///
+    /// `filetype` and `label` are **output-only**: Kodi always returns both, and
+    /// naming either in `properties` makes Kodi reject the entire call with
+    /// -32602 "Invalid params." — which is indistinguishable from a missing
+    /// plugin. Verified against the live box: each field below was accepted
+    /// individually, those two were rejected. Do not add them back.
+    static let directoryProperties = ["title", "file", "thumbnail", "art", "runtime"]
+
     func directory(_ path: String, media: String) async throws -> [MediaItem] {
         let payload = try await list(
             method: "Files.GetDirectory",
             params: [
                 "directory": path,
                 "media": media,
-                "properties": ["title", "thumbnail", "art", "file", "filetype", "runtime"],
+                "properties": Self.directoryProperties,
             ]
         )
         return payload.files ?? []

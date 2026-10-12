@@ -92,6 +92,30 @@ The UI is host-centric and the player state lives above the navigation stack.
   `ShellDestination`, `RemoteShortcut` and `LibrarySection` symbol resolves via
   `UIImage(systemName:)`, and that the shortcut row and the drawer agree on icons —
   they had drifted into two separate mappings.
+- **`Files.GetDirectory`: `filetype` and `label` are output-only.** Kodi returns
+  both whether or not you ask. Name either in `properties` and Kodi rejects the
+  entire call with `-32602 Invalid params.` — the *same* error a non-existent
+  plugin gives, which sends you hunting for a missing addon instead of a bad
+  request. Verified field-by-field against the live box;
+  `KodiClient.directoryProperties` is the single place that list lives and
+  `KodiModelTests` fails if either name is added back.
+- **Kodi plugin paths browse like folders.** `Files.GetDirectory` on
+  `plugin://<addonid>/` returns real entries (the live YouTube addon answers 21),
+  nested `plugin://…?query` paths included, so `DirectoryView` recurses through
+  add-on content with no special handling. `media` accepts `files`/`video`
+  interchangeably for this. There is no JSON-RPC method to "open an add-on" —
+  `Addons.ExecuteAddon` launches it *on the box*; browsing is a file walk.
+- **Plugin labels carry Kodi markup.** The live YouTube addon answers
+  `[B]My Subscriptions[/B]`. `String.strippingKodiMarkup` strips the real tag list
+  (not any `[word]`, so `[REC]` survives) and `MediaItem.heading` applies it, so
+  every row benefits rather than each view remembering.
+- **A closure passed to `safeAreaInset` is only re-evaluated when its *owner*
+  invalidates.** `ShellView` takes the model as a plain parameter and observes only
+  `Session`, so reading `model.activePlayer` inside the inset never re-ran it: the
+  now-playing bar appeared only after navigating away and back, which rebuilt the
+  shell. Anything the inset renders that depends on an observable belongs in its own
+  view holding `@ObservedObject` (see `PlaybackBar`); an `.animation(value:)` in the
+  parent cannot fix this either, because the parent never re-evaluates.
 - `YatseRemote/UI/HomeScreen.swift`, `SettingsView.swift`,
   `PlaceholderScreen.swift` — Home, Settings/About, and the honest placeholder
   (now only `pvr`; `files` and `addons` are implemented).

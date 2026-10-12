@@ -328,4 +328,56 @@ final class KodiModelTests: XCTestCase {
         XCTAssertEqual(payload.sources?.first?.label, "Films")
         XCTAssertEqual(payload.sources?.first?.file, "smb://nas/films/")
     }
+
+    // MARK: Files.GetDirectory request shape
+
+    /// `filetype` and `label` are output-only. Kodi returns both whether or not
+    /// they are asked for, and naming either in `properties` makes it reject the
+    /// whole call with -32602 — indistinguishable from a missing plugin, which
+    /// is exactly how the Files browser looked broken against the live box.
+    func testDirectoryPropertiesOmitOutputOnlyFields() {
+        XCTAssertFalse(KodiClient.directoryProperties.contains("filetype"))
+        XCTAssertFalse(KodiClient.directoryProperties.contains("label"))
+        XCTAssertTrue(KodiClient.directoryProperties.contains("file"))
+        XCTAssertTrue(KodiClient.directoryProperties.contains("thumbnail"))
+    }
+
+    // MARK: Kodi text markup
+
+    func testKodiMarkupIsStrippedFromLabels() {
+        XCTAssertEqual("[B]My Subscriptions[/B]".strippingKodiMarkup, "My Subscriptions")
+        XCTAssertEqual("[COLOR yellow]Trending[/COLOR]".strippingKodiMarkup, "Trending")
+        XCTAssertEqual("[I][U]Both[/U][/I]".strippingKodiMarkup, "Both")
+        XCTAssertEqual("[CR]Search".strippingKodiMarkup, "Search")
+    }
+
+    /// Only real Kodi tags are removed — a title with legitimate brackets stays.
+    func testBracketedTitlesSurviveStripping() {
+        XCTAssertEqual("[REC]".strippingKodiMarkup, "[REC]")
+        XCTAssertEqual("Movie [2019]".strippingKodiMarkup, "Movie [2019]")
+    }
+
+    func testHeadingIsStrippedForDisplay() throws {
+        let json = """
+        {"jsonrpc":"2.0","id":1,"result":{"files":[
+          {"file":"plugin://plugin.video.youtube/special/x","filetype":"directory",
+           "label":"[B]My Subscriptions[/B]","type":"unknown"}
+        ],"limits":{"start":0,"end":1,"total":1}}}
+        """
+        let payload = try result(ListPayload.self, from: json)
+        XCTAssertEqual(payload.files?.first?.heading, "My Subscriptions")
+    }
+
+    // MARK: Add-ons
+
+    func testOnlyPluginAddonsOfferBrowsing() {
+        let plugin = Addon(addonid: "plugin.video.youtube", type: "xbmc.python.pluginsource")
+        XCTAssertTrue(plugin.isBrowsable)
+        XCTAssertEqual(plugin.browsePath, "plugin://plugin.video.youtube/")
+
+        // Nothing to browse in a skin, a scraper or a font.
+        XCTAssertFalse(Addon(addonid: "skin.estuary", type: "xbmc.gui.skin").isBrowsable)
+        XCTAssertFalse(Addon(addonid: "metadata.x", type: "xbmc.metadata.scraper.movies").isBrowsable)
+        XCTAssertFalse(Addon(addonid: "resource.images.x", type: "kodi.resource.images").isBrowsable)
+    }
 }

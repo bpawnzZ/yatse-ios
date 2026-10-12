@@ -35,15 +35,8 @@ struct ShellView: View {
             }
             .id(destination)
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if MiniPlayer.isVisible(activePlayer: model.activePlayer) {
-                    // Removed from the tree when nothing plays, so the inset
-                    // collapses to nothing and the remote keeps the space.
-                    MiniPlayer(model: model) { showingNowPlaying = true }
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                PlaybackBar(model: model) { showingNowPlaying = true }
             }
-            .animation(.easeInOut(duration: 0.22),
-                       value: MiniPlayer.isVisible(activePlayer: model.activePlayer))
 
             if drawerOpen {
                 Color.black.opacity(0.45)
@@ -138,5 +131,35 @@ struct ShellView: View {
         pushed.removeAll()
         destination = item
         withAnimation { drawerOpen = false }
+    }
+}
+
+/// The bar observes the model itself, and that is the whole point of it being a
+/// separate view.
+///
+/// `safeAreaInset`'s closure is evaluated by whoever owns it, and `ShellView`
+/// never observes `AppModel` — it takes the model as a parameter and only reads
+/// `session`. Reading `activePlayer` inside that closure therefore never
+/// invalidated the shell, so the bar did not appear when playback started: it
+/// only showed up once something else rebuilt the shell, such as navigating to
+/// another destination and back. Owning `@ObservedObject` here fixes the
+/// invalidation at its source rather than papering over it.
+///
+/// The bar is removed from the tree when nothing plays, so the inset collapses
+/// to nothing and the remote keeps the space.
+private struct PlaybackBar: View {
+    @ObservedObject var model: AppModel
+    let onOpen: () -> Void
+
+    private var isVisible: Bool { MiniPlayer.isVisible(activePlayer: model.activePlayer) }
+
+    var body: some View {
+        Group {
+            if isVisible {
+                MiniPlayer(model: model, onOpen: onOpen)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: isVisible)
     }
 }
