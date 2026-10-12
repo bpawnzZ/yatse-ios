@@ -9,12 +9,19 @@ struct LibraryView: View {
     let section: LibrarySection
     var onOpenDrawer: (() -> Void)? = nil
 
+    @Environment(\.scrollMemory) private var scrollMemory
+
     @State private var items: [MediaItem] = []
     @State private var total = 0
     @State private var isLoading = false
     @State private var error: String?
+    /// The item the view was left at, held until the content is back and it can
+    /// be scrolled to.
+    @State private var topItem: Int?
 
     private let pageSize = 60
+
+    private var scrollKey: String { ScrollPlace.library(section) }
 
     var body: some View {
         Group {
@@ -44,7 +51,7 @@ struct LibraryView: View {
             }
         }
         .themedScreen()
-        .task { await reload() }
+        .task { await restoreAndReload() }
     }
 
     // MARK: Layouts
@@ -65,6 +72,7 @@ struct LibraryView: View {
             }
         }
         .listStyle(.plain)
+        .rememberedScrollPosition(scrollKey, top: $topItem)
     }
 
     private var grid: some View {
@@ -85,8 +93,10 @@ struct LibraryView: View {
                     ProgressView().gridCellColumns(2)
                 }
             }
+            .scrollTargetLayout()
             .padding()
         }
+        .rememberedScrollPosition(scrollKey, top: $topItem)
     }
 
     @ViewBuilder
@@ -151,6 +161,22 @@ struct LibraryView: View {
     private func play(_ item: MediaItem) async {
         guard let payload = item.playableItem else { return }
         await model.play(item: payload)
+    }
+
+    /// Reloads, then puts the view back where it was left.
+    ///
+    /// The remembered place can sit several pages below the first one, and a grid
+    /// cannot scroll to an item it has not loaded, so the pages up to it are
+    /// pulled first. Bounded by how many pages that far down and by `total`, so a
+    /// section that ends early cannot spin here.
+    private func restoreAndReload() async {
+        let remembered = scrollMemory.top(for: scrollKey)
+        await reload()
+        guard let remembered else { return }
+        for _ in 0..<(remembered / pageSize + 1) where items.count <= remembered && items.count < total {
+            await loadMore()
+        }
+        topItem = remembered
     }
 
     private func reload() async {
@@ -281,6 +307,8 @@ struct FavoritesScreen: View {
     let onOpen: (Favorite) -> Void
 
     @EnvironmentObject private var favorites: FavoriteStore
+    @Environment(\.scrollMemory) private var scrollMemory
+    @State private var topItem: Int?
 
     var body: some View {
         Group {
@@ -309,8 +337,10 @@ struct FavoritesScreen: View {
                                 }
                         }
                     }
+                    .scrollTargetLayout()
                     .padding()
                 }
+                .rememberedScrollPosition(ScrollPlace.favorites, top: $topItem)
             }
         }
         .navigationTitle("Favorites")
@@ -322,6 +352,9 @@ struct FavoritesScreen: View {
             }
         }
         .themedScreen()
+        // The grid is drawn from the store, so the content is there on the first
+        // pass; restoring in a task puts it back after that pass, not before it.
+        .task { topItem = scrollMemory.top(for: ScrollPlace.favorites) }
     }
 
     private func tile(_ favorite: Favorite) -> some View {
@@ -350,9 +383,14 @@ struct ChildrenView: View {
     let heading: String
     var onOpenDrawer: (() -> Void)? = nil
 
+    @Environment(\.scrollMemory) private var scrollMemory
+
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
     @State private var error: String?
+    @State private var topItem: Int?
+
+    private var scrollKey: String { ScrollPlace.children(request) }
 
     var body: some View {
         List {
@@ -368,6 +406,7 @@ struct ChildrenView: View {
             }
         }
         .listStyle(.plain)
+        .rememberedScrollPosition(scrollKey, top: $topItem)
         .overlay {
             if items.isEmpty {
                 if isLoading {
@@ -393,7 +432,10 @@ struct ChildrenView: View {
             }
         }
         .themedScreen()
-        .task { await load() }
+        .task {
+            await load()
+            topItem = scrollMemory.top(for: scrollKey)
+        }
     }
 
     private func load() async {
@@ -485,9 +527,14 @@ struct DirectoryView: View {
     let title: String
     var onOpenDrawer: (() -> Void)? = nil
 
+    @Environment(\.scrollMemory) private var scrollMemory
+
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
     @State private var error: String?
+    @State private var topItem: Int?
+
+    private var scrollKey: String { ScrollPlace.directory(path) }
 
     /// Add-on content browses as a poster grid, matching the library; a
     /// filesystem folder — the Files browser — stays a list.
@@ -517,7 +564,10 @@ struct DirectoryView: View {
             }
         }
         .themedScreen()
-        .task { await load() }
+        .task {
+            await load()
+            topItem = scrollMemory.top(for: scrollKey)
+        }
     }
 
     private var list: some View {
@@ -541,6 +591,7 @@ struct DirectoryView: View {
             }
         }
         .listStyle(.plain)
+        .rememberedScrollPosition(scrollKey, top: $topItem)
     }
 
     private var grid: some View {
@@ -570,8 +621,10 @@ struct DirectoryView: View {
                     }
                 }
             }
+            .scrollTargetLayout()
             .padding()
         }
+        .rememberedScrollPosition(scrollKey, top: $topItem)
     }
 
     @ViewBuilder

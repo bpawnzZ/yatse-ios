@@ -127,7 +127,7 @@ python3 scripts/check-host.py
 `scripts/check-host.py` reads the host, username and password **only** from the
 environment (`KODI_HOST`, `KODI_USER`, `KODI_PASS`), defines no defaults, and
 exits non-zero with a clear message if any is missing. It uses the Python
-standard library only. See `AGENT.md` for the traps this change encodes.
+standard library only — no dependency is worth adding for one socket check.
 
 ## Not implemented (deliberately, with reasons)
 
@@ -221,8 +221,8 @@ first use — accept the prompt or discovery and JSON-RPC both fail.
 - Kodi's JSON-RPC HTTP endpoint is `/jsonrpc` on port 8080 by default, and in
   principle the WebSocket upgrade is served on that same port. On the box this
   was measured against, an upgrade to `:8080` returns **HTTP 200** and only
-  `:9090` returns `101` — that is the open defect in `AGENT.md`, and it is why
-  live push updates do not land. Nothing depends on the socket: a 1 Hz
+  `:9090` returns `101` — the app builds its socket URL on the HTTP port, which
+  is why live push updates do not land yet. Nothing depends on the socket: a 1 Hz
   `Player.GetActivePlayers` poll is what keeps the now-playing bar honest.
 - Notifications arrive interleaved with responses on the WebSocket, so the first
   frame after a call is not necessarily that call's reply. Match on `method`

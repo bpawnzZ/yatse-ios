@@ -17,9 +17,12 @@ struct AddonsScreen: View {
     @ObservedObject var model: AppModel
     let onOpenDrawer: () -> Void
 
+    @Environment(\.scrollMemory) private var scrollMemory
+
     @State private var addons: [Addon] = []
     @State private var isLoading = true
     @State private var error: String?
+    @State private var topItem: Int?
 
     /// Video add-ons only, alphabetical. A disabled one stays listed — dropping
     /// it would put the menu's Enable out of reach.
@@ -44,8 +47,10 @@ struct AddonsScreen: View {
                     cell(addon)
                 }
             }
+            .scrollTargetLayout()
             .padding()
         }
+        .rememberedScrollPosition(ScrollPlace.addons, top: $topItem)
         .overlay { emptyState }
         .navigationTitle("Addons")
         .navigationBarTitleDisplayMode(.inline)
@@ -64,7 +69,10 @@ struct AddonsScreen: View {
             }
         }
         .themedScreen()
-        .task { await load() }
+        .task {
+            await load()
+            topItem = scrollMemory.top(for: ScrollPlace.addons)
+        }
     }
 
     @ViewBuilder
