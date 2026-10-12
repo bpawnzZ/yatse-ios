@@ -1,5 +1,15 @@
 # YatseRemote — iOS Kodi remote
 
+[![Build unsigned IPA](https://github.com/bpawnzZ/yatse-ios/actions/workflows/build-ipa.yml/badge.svg)](https://github.com/bpawnzZ/yatse-ios/actions/workflows/build-ipa.yml)
+[![Unit tests](https://github.com/bpawnzZ/yatse-ios/actions/workflows/tests.yml/badge.svg)](https://github.com/bpawnzZ/yatse-ios/actions/workflows/tests.yml)
+[![Latest build](https://img.shields.io/github/v/release/bpawnzZ/yatse-ios?label=latest%20build&color=blue)](https://github.com/bpawnzZ/yatse-ios/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-lightgrey.svg)](#requirements)
+
+**Download the latest build →** [github.com/bpawnzZ/yatse-ios/releases/latest](https://github.com/bpawnzZ/yatse-ios/releases/latest)
+— an unsigned IPA you re-sign with your own Apple ID. No developer account, no
+App Store, every feature unlocked.
+
 A from-scratch SwiftUI remote for Kodi, written against a specification
 reverse-engineered from the **Yatse 12.0.0** Android APK. Clean-room: the
 protocol surface (method names, parameter properties, discovery records, default
@@ -189,9 +199,18 @@ ad-hoc signing, and a flaky simulator run can never block an IPA.
 
 ### Install on a device
 
+Every push to `main` publishes a release, so the newest build is always at the
+[latest release](https://github.com/bpawnzZ/yatse-ios/releases/latest):
+
+```bash
+curl -LO https://github.com/bpawnzZ/yatse-ios/releases/latest/download/YatseRemote-unsigned.ipa
+curl -LO https://github.com/bpawnzZ/yatse-ios/releases/latest/download/YatseRemote-unsigned.ipa.sha256
+shasum -a 256 -c YatseRemote-unsigned.ipa.sha256
+```
+
 The IPA is unsigned on purpose — SideStore, AltStore or Sideloadly re-sign it
-with your own Apple ID. Copy the `YatseRemote-unsigned.ipa` artifact's SHA-256
-from the build log and check it before installing.
+with your own Apple ID. The same file is also an Actions artifact for 30 days,
+but releases are the ones that stick around.
 
 Free re-signing caveat: the app needs no special entitlements, so nothing here
 degrades after re-signing. Local-network access is granted per app by iOS on
@@ -199,9 +218,12 @@ first use — accept the prompt or discovery and JSON-RPC both fail.
 
 ## Traps worth knowing
 
-- Kodi's webserver serves HTTP and WebSocket JSON-RPC on the **same port**
-  (8080 by default) at `/jsonrpc`. Port 9090 is Kodi's own web UI and is
-  unauthenticated on many installs; this app talks to 8080 with credentials.
+- Kodi's JSON-RPC HTTP endpoint is `/jsonrpc` on port 8080 by default, and in
+  principle the WebSocket upgrade is served on that same port. On the box this
+  was measured against, an upgrade to `:8080` returns **HTTP 200** and only
+  `:9090` returns `101` — that is the open defect in `AGENT.md`, and it is why
+  live push updates do not land. Nothing depends on the socket: a 1 Hz
+  `Player.GetActivePlayers` poll is what keeps the now-playing bar honest.
 - Notifications arrive interleaved with responses on the WebSocket, so the first
   frame after a call is not necessarily that call's reply. Match on `method`
   (notifications) vs `id` (responses).
@@ -225,3 +247,15 @@ xcodebuild test -project YatseRemote.xcodeproj -scheme YatseRemote \
 
 The fixtures in `YatseRemoteTests` are verbatim responses captured from a live
 Kodi 21.3 box, including `currentsubtitle: {}` and the `-32601` error envelope.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE). Use it, fork it, ship it.
+
+The Swift here is original code. What came from the Android app is the
+*protocol*: method names, parameter properties, discovery records and default
+ports — facts about an interface, not creative expression.
+[`docs/CLEANROOM.md`](docs/CLEANROOM.md) records exactly where that line sits.
+No Yatse code, resources, strings or artwork are used, and no decompiled body was
+ever copied. "Yatse" is the name of the Android app this was specified from, not
+the name of this project.

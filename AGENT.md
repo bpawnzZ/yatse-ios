@@ -37,7 +37,12 @@ decompiled code bodies are copied. See `README.md` and `docs/CLEANROOM.md`.
 - Repo is **public** since 2026-10-12, so GitHub's free macOS runner minutes apply
   (a public repo is not billed the private-repo **10× multiplier**). Every commit to
   `main` — even a docs-only one — still *runs* a build, because there is no
-  `paths-ignore`; it is just no longer expensive.
+  `paths-ignore`; it is just no longer expensive. It is licensed **MIT** (`LICENSE`)
+  and carries a repo description plus topics for search — those two, plus the
+  README's download link, are the only things that make it findable, so keep them
+  current rather than treating them as decoration. The project name still says
+  "Yatse", which is the Android app's trademark; renaming is a real consideration if
+  this is promoted.
 - Open items are listed at the end under **Next steps**.
 
 ## How work ships here
