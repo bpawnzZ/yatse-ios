@@ -401,12 +401,6 @@ struct Addon: Decodable, Identifiable, Hashable {
 
     var displayName: String { name.isEmpty ? addonid : name }
 
-    /// The `xbmc.addon.*` prefix is noise in a list heading.
-    var typeLabel: String {
-        let trimmed = type.replacingOccurrences(of: "xbmc.addon.", with: "")
-        return trimmed.isEmpty ? "Other" : trimmed.prefix(1).uppercased() + trimmed.dropFirst()
-    }
-
     /// Add-on types whose content Kodi exposes as a browsable virtual path.
     ///
     /// Verified against the live box: `Files.GetDirectory` on
@@ -416,6 +410,18 @@ struct Addon: Decodable, Identifiable, Hashable {
     var isBrowsable: Bool {
         ["xbmc.python.pluginsource", "xbmc.addon.video", "xbmc.addon.audio",
          "xbmc.addon.image", "kodi.addon.game"].contains(type)
+    }
+
+    /// Whether this is a video add-on — which is all the Addons destination lists.
+    ///
+    /// The identifier namespace is what actually separates them. Measured on the
+    /// live host: every video add-on answers `type: "xbmc.python.pluginsource"`
+    /// and `xbmc.addon.video` does not occur at all — 0 of the 68 installed
+    /// add-ons — so a predicate on that type draws an empty screen rather than
+    /// failing loudly. `plugin.video.*` is Kodi's convention for a video plugin;
+    /// `script.pystone.benchmark` is a plugin source that is not one.
+    var isVideoAddon: Bool {
+        isBrowsable && addonid.hasPrefix("plugin.video.")
     }
 
     /// Where this add-on's content lives, for `Files.GetDirectory`.
@@ -466,5 +472,39 @@ enum Artwork {
             if let raw = art[key], let url = url(raw) { return url }
         }
         return url(thumbnail)
+    }
+
+    /// Artwork the device cannot fetch by itself, served by the host instead.
+    ///
+    /// Only library art decodes to an absolute `http(s)` URL — the media server's
+    /// own address — so it is fetched directly, as before. Add-on and plugin art
+    /// decodes to something the device has no route to: a local filesystem path
+    /// (`/storage/.kodi/addons/<id>/icon.png`) or a `special://` value. Those are
+    /// handed to Kodi's own image endpoint, which can resolve them. The value Kodi
+    /// returned is already percent-encoded for exactly that request, so it is
+    /// passed through rather than decoded and re-encoded.
+    static func url(_ raw: String, host: Host) -> URL? {
+        guard !raw.isEmpty else { return nil }
+        if let direct = url(raw), let scheme = direct.scheme, scheme.hasPrefix("http") {
+            return direct
+        }
+        guard var components = host.rpcURL.flatMap({
+            URLComponents(url: $0, resolvingAgainstBaseURL: false)
+        }) else { return nil }
+
+        var value = raw
+        if value.hasPrefix("image://") { value = String(value.dropFirst("image://".count)) }
+        components.percentEncodedPath = "/image/" + value
+        components.query = nil
+        components.fragment = nil
+        return components.url
+    }
+
+    /// Best available poster for a row that may carry add-on or plugin artwork.
+    static func poster(for art: [String: String], thumbnail: String, host: Host) -> URL? {
+        for key in ["poster", "thumb", "cover", "fanart", "banner", "icon"] {
+            if let raw = art[key], let url = url(raw, host: host) { return url }
+        }
+        return url(thumbnail, host: host)
     }
 }

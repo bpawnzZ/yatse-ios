@@ -11,24 +11,25 @@ decompiled code bodies are copied. See `README.md` and `docs/CLEANROOM.md`.
 
 ## Current state (2026-10-11, last update)
 
-- **`main` HEAD `aaf982f`** — "real artwork transparency, a bar that appears on
-  play, and browsable addons (#9)".
-- **Latest green runs:** build `38189133360` (main, post-merge) and tests
-  `38188627860` → **98 tests, 0 failures**. Previous milestone PR #8 = `756f62c`
-  (93 tests), #7 = `9513833` (76 tests).
-- **Latest IPA sent to Alpha's Telegram:** message 453 in `hermes_2` topic 7
-  (build `38189133360`, 1,958,909 bytes). Re-sends are fine; the send script
-  verifies the hash before uploading.
+- **`main` moves with every merge: read `git log --oneline -5` instead of
+  trusting a hash written here.** This file deliberately no longer pins a HEAD
+  sha or run IDs — they went stale within a day, and a stale handoff is worse
+  than none. `gh run list --limit 5` is the live answer.
+- **Last recorded test count: 98 passing, 0 failures.** The suite has grown since
+  (the add-on/favourites/grid change added cases); the PR's "Unit tests" run is
+  the current number. Previous milestones: #8 = 93 tests, #7 = 76.
+- **The latest IPA sent to Alpha's Telegram:** message 453 in `hermes_2` topic 7.
+  Re-sends are fine; the send script verifies the hash before uploading.
 - **There is no Swift toolchain on this box.** `which swiftc` is empty. CI is the
   only compiler: never claim a Swift change builds, or a test passes, until a run
   says so. A green build is `xcodebuild` on a GitHub macOS runner, not a local
   check.
-- **On-device testing has started** (previously this file said it had not). Alpha
-  installs the IPA and reports what he sees; that loop has already found four real
-  bugs this file records: the invisible Movies icon, the now-playing bar not
-  appearing on play, artwork buried under the backdrop blur, and `Files`
-  failing on every call. **Nothing visual is verified until he says so** — CI can
-  compile and unit-test, and cannot see the screen.
+- **On-device testing is the loop that finds real bugs.** Alpha installs the IPA
+  and reports what he sees; that loop has already found the invisible Movies
+  icon, the now-playing bar not appearing, artwork buried under the blur, `Files`
+  failing on every call, and the Pvr-sized assumptions about add-ons. **Nothing
+  visual is verified until he says so** — CI can compile and unit-test, and cannot
+  see the screen.
 - Repo is **private**. macOS runner minutes bill at a **10× multiplier** (GitHub
   Free: 2,000 min/month ≈ 200 macOS minutes). Every commit to `main` — even a
   docs-only one — burns a macOS run, because there is no `paths-ignore`.
@@ -98,10 +99,22 @@ The UI is host-centric and the player state lives above the navigation stack.
 - `YatseRemote/UI/RootView.swift` — branches on `Session.model`: nil → the host
   picker in a `NavigationStack`; non-nil → `ShellView`.
 - `YatseRemote/UI/ShellView.swift` — the shell: one `NavigationStack(path:)` for
-  the current destination, `.id(destination)` so changing destination clears
-  pushed detail screens, `PlaybackBar` as a `.safeAreaInset(edge: .bottom)`, and
-  the drawer as a ZStack overlay. Destinations are selected by value, not pushed;
-  favourites that are *places inside* a destination are pushed.
+  the current destination, `.id(destination)` so changing destination rebuilds
+  the stack, `PlaybackBar` as a `.safeAreaInset(edge: .bottom)`, and the drawer as
+  a ZStack overlay. Destinations are selected by value, not pushed; favourites
+  that are *places inside* a destination are pushed. It also owns
+  **`NavigationMemory`**: the screens pushed within each destination, so leaving
+  Addons for the Remote and coming back restores the folder you were in instead of
+  resetting to the root. `select()` records the outgoing destination's path and
+  restores the incoming one's — it no longer does `pushed.removeAll()`, which is
+  what used to reset every destination on every switch. Session-scoped (`@State`,
+  never persisted), and unit-tested, because "never visited", "sits at its root"
+  and "holds a place" have to answer differently.
+- **Pushed screens carry the drawer control.** `DirectoryView` and `ChildrenView`
+  take an optional `onOpenDrawer` and show the leading button when they have one,
+  so the drawer is reachable while drilled into an add-on rather than only from a
+  destination's root. `AddonsScreen`/`FilesScreen`/`LibraryView` pass theirs down,
+  and `DirectoryView` forwards it to any `DirectoryView` it pushes.
 - **`PlaybackBar` is a separate view for a reason.** `safeAreaInset`'s closure is
   re-evaluated only when its *owner* invalidates, and `ShellView` takes the model
   as a plain parameter while observing only `Session`. Reading
@@ -113,11 +126,14 @@ The UI is host-centric and the player state lives above the navigation stack.
 - `YatseRemote/UI/AppDrawer.swift` — `ShellDestination` (the single source of
   truth for a destination's title/icon/implemented-ness, also carrying
   `librarySection`), `RemoteShortcut` (the five quick links; Pictures is a Kodi
-  window, not a destination), the Favorites section, and the header's mic/search
-  buttons (both still open `PlaceholderSheet` — library search is not
-  implemented). `RemoteShortcut` **delegates its icon and title to the
-  destination it points at** — they used to be two separate maps that drifted,
-  which is how the Movies tile went blank.
+  window, not a destination), and the header's mic/search buttons (both still open
+  `PlaceholderSheet` — library search is not implemented). **Favorites is a
+  destination, not an expanded list**: the drawer used to draw one row per saved
+  favourite, which grows without bound and cannot hold a poster grid at 300pt, so
+  it is now a single row opening the Favorites screen and removal happens on the
+  tile. `RemoteShortcut` **delegates its icon and title to the destination it
+  points at** — they used to be two separate maps that drifted, which is how the
+  Movies tile went blank.
 - `YatseRemote/UI/RemoteTheme.swift` — **every colour lives here.** Tokens:
   background, **surface**, tile fill, tile fill pressed, accent, icon, nav bar
   fill, divider, bar fill, artwork scrim, **artwork blur**, corner radius, with
@@ -148,19 +164,36 @@ The UI is host-centric and the player state lives above the navigation stack.
   → `Files.GetDirectory`, folders drill down, leaves play, and the **star button
   saves the current location** (`FavoriteButton`, shared with the library and the
   drill-downs so "favourite" means one thing everywhere).
-- `YatseRemote/UI/AddonsScreen.swift` — `Addons.GetAddons` grouped by type. A
-  **plugin add-on opens like a folder**: its row is a `NavigationLink` into
-  `DirectoryView(path: addon.browsePath)` where `browsePath` is
-  `plugin://<addonid>/`. Enable/disable is a **swipe action** — the tap means
-  "open" now, and a switch on every row buried that. Add-ons with no browsable
-  tree (skins, scrapers, fonts) stay plain rows. `enabled`/`broken` are real
-  booleans on Kodi 19+ (confirmed live on 21.3); disabled add-ons must stay
-  listed or the switch could never be turned back on.
+- `YatseRemote/UI/AddonsScreen.swift` — the Addons destination: **video add-ons
+  only**, as a two-column poster grid. `Addon.isVideoAddon` is the filter (see
+  *Protocol rules* for why the obvious type does not work). Tapping a tile opens
+  `DirectoryView(path: addon.browsePath)`, which is a grid because the path is
+  `plugin://…`. **Enable/disable and "Add to Favorites" are both in the
+  long-press menu, not a swipe action** — a `LazyVGrid` has no swipe actions, so
+  converting the list would have silently removed the only way to re-enable an
+  add-on. A disabled add-on must stay listed for the same reason. Add-ons with no
+  browsable tree are no longer reachable here at all: they are not video add-ons.
+- `YatseRemote/UI/LibraryView.swift` also holds `FavoritesScreen` (the Favorites
+  destination, the same grid) and `FavoriteMenuItem` (the long-press "Add to
+  Favorites" / "Remove favorite" entry, shared with the add-on grid so the gesture
+  means one thing everywhere).
+- **`PosterTile` is parameterised, not `MediaItem`-typed.** It takes
+  (artwork URL, title, detail) and keeps a `MediaItem` initialiser as a
+  convenience, so the library, add-on, favourite and directory grids render one
+  tile. A second tile type would be free to drift — which is how the Movies tile
+  once went blank.
+- **`DirectoryView` decides its own layout from the path**:
+  `DirectoryView.layout(forPath:)` is `.grid` for `plugin://…` and `.list`
+  otherwise. That is why the Files browser is unchanged and add-on content is a
+  grid without any caller passing a flag — and why a favourite saved on a plugin
+  folder reopens the way it was saved.
 - `YatseRemote/Core/Favorites.swift` — `Favorite` / `FavoriteTarget` /
   `FavoriteStore` (UserDefaults key `yatse.favorites.v1`). A target's `id` is
   derived from the target, so the same place cannot be saved twice and the star
-  knows filled from outline. A section favourite switches destination; anything
-  deeper is pushed onto the shell's path.
+  knows filled from outline. `Favorite` also carries **optional** `art` /
+  `thumbnail` so the Favorites grid shows posters — optional is load-bearing, see
+  the trap below. A section favourite switches destination; anything deeper is
+  pushed onto the shell's path.
 - `YatseRemote/UI/DiagnosticsView.swift` + `Core/Diagnostics.swift` — the
   per-layer host self-check. Its reachability probe counts **HTTP 401 as success**
   (the host answered), which is the only way to distinguish "nothing listening"
@@ -215,6 +248,29 @@ rather than re-guess; the harnesses are listed below.
   add-on content with no special handling; `media` accepts `files`/`video`
   interchangeably here. **There is no JSON-RPC method that "opens an add-on"** —
   `Addons.ExecuteAddon` launches it *on the box*; browsing is a file walk.
+- **A "video add-on" is a plugin source whose id starts `plugin.video.`, not a
+  `xbmc.addon.video`.** Measured on the live box: all 68 installed add-ons were
+  binned by `type`, and **`xbmc.addon.video` does not occur at all** — every video
+  add-on answers `xbmc.python.pluginsource` (YouTube, JellyCon, PlexKodiConnect
+  ×3, TMDb Helper). A filter on the type therefore lists **nothing**, and it fails
+  silently: an empty screen, not an error. `Addon.isVideoAddon` is
+  `isBrowsable && addonid.hasPrefix("plugin.video.")`, and `script.pystone.benchmark`
+  is the measured counter-example — a plugin source that is not a video add-on.
+  `Addons.GetAddonDetails` does report `extrainfo: provides = "video audio"`, but
+  it is one extra round trip per add-on, so it is not worth a list screen.
+- **Add-on and plugin artwork is not fetchable the way library artwork is.**
+  Library art decodes to an absolute `http://<media server>` URL and is fetched
+  directly. Add-on art arrives as `image://%2fstorage%2f.kodi%2faddons%2f…%2ficon.png`,
+  which decodes to a **local filesystem path**, and plugin entries decode to
+  `special://home/…` — neither is a URL the device can request, so before this
+  change every add-on and plugin tile silently fell back to the placeholder. They
+  are served by the host's own image endpoint instead: `Artwork.url(_:host:)`
+  builds `{scheme}://{host}:{port}/image/{original value}` for anything that is
+  not already absolute, passing Kodi's value through as it arrived (it is already
+  percent-encoded for exactly that request). Absolute values keep going direct.
+  Only the library and the add-on grids use the host-aware overload so far — the
+  Files list still resolves folders through the old path and still shows
+  placeholders for `image://DefaultFolder.png`-style icons.
 - **Plugin labels carry Kodi markup.** The live YouTube addon answers
   `[B]My Subscriptions[/B]`. `String.strippingKodiMarkup` strips the real tag list
   (deliberately not any `[word]`, so `[REC]` survives) and `MediaItem.heading`
@@ -238,6 +294,15 @@ rather than re-guess; the harnesses are listed below.
   hosts with `try?`, so adding a *non-optional* field to `Host` makes every saved
   host fail to decode and silently produces an empty list, guarded by
   `HostPersistenceTests.testDecodesPreChangeHostsWithoutLastCheck`.
+- **A new field on `Favorite` must be optional for the same reason.** The artwork
+  fields are optional, and `FavoritesTests` asserts that a favourite encoded with
+  no artwork keys — what an earlier build wrote — still decodes. Making either
+  non-optional would drop every favourite already saved, without an error.
+- **A `LazyVGrid` has no swipe actions.** `.swipeActions` is a `List` affordance.
+  Converting a list to a grid therefore deletes any swipe action silently, which
+  is why the add-on enable/disable action moved into the long-press menu; that is
+  also the only remaining way to re-enable a disabled add-on, so it must not be
+  dropped again.
 
 ## Known open defect (not fixed on purpose)
 

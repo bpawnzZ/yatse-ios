@@ -27,8 +27,40 @@ enum FavoriteTarget: Codable, Hashable {
 struct Favorite: Codable, Hashable, Identifiable {
     var title: String
     var target: FavoriteTarget
+    /// Artwork of the place it was saved from, so the Favorites grid can show a
+    /// poster rather than a list of names.
+    ///
+    /// Both of these MUST stay optional. `FavoriteStore.load()` decodes with
+    /// `try?`, so making either one non-optional would make every favourite saved
+    /// by an earlier build fail to decode and vanish without a word — the trap
+    /// `Host.lastCheck` already documents.
+    var art: [String: String]? = nil
+    var thumbnail: String? = nil
 
     var id: String { target.id }
+}
+
+extension Favorite {
+    /// Saving an add-on saves the plugin root it browses from.
+    init(addon: Addon) {
+        self.init(title: addon.displayName,
+                  target: .directory(path: addon.browsePath),
+                  thumbnail: addon.thumbnail)
+    }
+
+    /// Saving an entry inside an add-on saves the place that entry opens.
+    init(directoryEntry item: MediaItem) {
+        self.init(title: item.heading,
+                  target: .directory(path: item.file),
+                  art: item.art,
+                  thumbnail: item.thumbnail)
+    }
+
+    /// The poster for this favourite, resolved against the host it belongs to —
+    /// add-on artwork needs the host's image endpoint, see `Artwork.url(_:host:)`.
+    func artworkURL(host: Host) -> URL? {
+        Artwork.poster(for: art ?? [:], thumbnail: thumbnail ?? "", host: host)
+    }
 }
 
 /// The saved favourites, persisted. Same shape as `HostStore`: a small

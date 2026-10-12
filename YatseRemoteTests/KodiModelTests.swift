@@ -178,6 +178,39 @@ final class KodiModelTests: XCTestCase {
         XCTAssertNil(Artwork.poster(for: [:], thumbnail: ""))
     }
 
+    /// Add-on and plugin art decodes to something the device has no route to — a
+    /// local file path or a `special://` value — so it is served by the host's own
+    /// image endpoint, with the value Kodi sent passed through as it arrived.
+    /// Only library art, which is an absolute URL to the media server, goes direct.
+    func testAddonArtworkIsServedByTheHostAndLibraryArtworkIsNot() throws {
+        var host = Host()
+        host.address = "10.13.13.7"
+        host.port = 8080
+
+        let icon = try XCTUnwrap(Artwork.url(
+            "image://%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png", host: host))
+        XCTAssertEqual(icon.scheme, "http")
+        XCTAssertEqual(icon.host, "10.13.13.7")
+        XCTAssertEqual(icon.port, 8080)
+        XCTAssertEqual(icon.percentEncodedPath,
+                       "/image/%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png")
+
+        XCTAssertEqual(
+            Artwork.url("image://special%3a%2f%2fhome%2faddons%2fx.png", host: host)?
+                .percentEncodedPath,
+            "/image/special%3a%2f%2fhome%2faddons%2fx.png"
+        )
+
+        // Library art is already absolute; it is not routed through the host.
+        XCTAssertEqual(
+            Artwork.url("image://http%3a%2f%2f10.13.13.2%3a8096%2fposter.jpg/", host: host)?
+                .absoluteString,
+            "http://10.13.13.2:8096/poster.jpg"
+        )
+
+        XCTAssertNil(Artwork.url("", host: host))
+    }
+
     // MARK: Host
 
     func testHostBuildsEndpoints() {
@@ -252,49 +285,83 @@ final class KodiModelTests: XCTestCase {
 
     /// Captured from the live host (`Addons.GetAddons`, Kodi 21.3), which is how
     /// we know `enabled` is a real boolean rather than the "true"/"false" string
-    /// older builds sent.
+    /// older builds sent — and that a video add-on reports
+    /// `xbmc.python.pluginsource`. An earlier version of this fixture said
+    /// `xbmc.addon.video`; that type does not occur on the box at all, which is
+    /// exactly how a filter on it would have drawn an empty screen.
     static let liveAddons = """
     {"jsonrpc":"2.0","id":1,"result":{"addons":[
-      {"addonid":"plugin.video.youtube","type":"xbmc.addon.video","enabled":true,
+      {"addonid":"plugin.video.youtube","type":"xbmc.python.pluginsource","enabled":true,
        "name":"YouTube","version":"7.0.1","summary":"YouTube","description":"d",
-       "thumbnail":"","author":"team","broken":false},
-      {"addonid":"script.module.requests","type":"xbmc.addon.module","enabled":false,
+       "thumbnail":"image://%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png",
+       "author":"team","broken":false},
+      {"addonid":"script.module.requests","type":"xbmc.python.module","enabled":false,
        "name":"Requests","version":"2.31.0","summary":"s","description":"d",
+       "thumbnail":"","author":"team","broken":false},
+      {"addonid":"script.pystone.benchmark","type":"xbmc.python.pluginsource","enabled":true,
+       "name":"CPU Benchmark","version":"1.0.0","summary":"s","description":"d",
+       "thumbnail":"","author":"team","broken":false},
+      {"addonid":"skin.estuary","type":"xbmc.gui.skin","enabled":true,
+       "name":"Estuary","version":"1.0.0","summary":"s","description":"d",
        "thumbnail":"","author":"team","broken":false}
-    ],"limits":{"start":0,"end":2,"total":2}}}
+    ],"limits":{"start":0,"end":4,"total":4}}}
     """
 
     func testAddonsDecodeTheLiveResponse() throws {
         let payload = try result(ListPayload.self, from: Self.liveAddons)
         let addons = try XCTUnwrap(payload.addons)
-        XCTAssertEqual(addons.count, 2)
+        XCTAssertEqual(addons.count, 4)
 
         let youtube = try XCTUnwrap(addons.first)
         XCTAssertEqual(youtube.addonid, "plugin.video.youtube")
         XCTAssertEqual(youtube.displayName, "YouTube")
         XCTAssertTrue(youtube.enabled)
         XCTAssertFalse(youtube.broken)
-        XCTAssertEqual(youtube.typeLabel, "Video")
+        XCTAssertTrue(youtube.isVideoAddon)
     }
 
-    /// A disabled add-on must stay in the list and read as disabled — filtering
-    /// it out is what would make the switch impossible to turn back on.
-    func testDisabledAddonDecodesAsDisabledAndKeepsItsType() throws {
+    /// Only video add-ons reach the Addons destination. The measured trap: the
+    /// live host answers `xbmc.python.pluginsource` for every video add-on and
+    /// never `xbmc.addon.video` — 0 of its 68 add-ons — so a predicate on that
+    /// type lists nothing at all. This asserts the rule against the values the
+    /// host actually sends.
+    func testOnlyVideoAddonsAreListed() throws {
         let payload = try result(ListPayload.self, from: Self.liveAddons)
-        let disabled = try XCTUnwrap(payload.addons?.last)
-        XCTAssertFalse(disabled.enabled)
-        XCTAssertEqual(disabled.typeLabel, "Module")
+        let listed = try XCTUnwrap(payload.addons).filter(\.isVideoAddon)
+
+        XCTAssertEqual(listed.map(\.addonid), ["plugin.video.youtube"])
+
+        // A plugin source that is not a video add-on, a skin and a module.
+        XCTAssertFalse(Addon(addonid: "script.pystone.benchmark",
+                             type: "xbmc.python.pluginsource").isVideoAddon)
+        XCTAssertFalse(Addon(addonid: "skin.estuary", type: "xbmc.gui.skin").isVideoAddon)
+        XCTAssertFalse(Addon(addonid: "script.module.requests",
+                             type: "xbmc.python.module").isVideoAddon)
+
+        // The video namespace is what decides it, not the plugin-source type
+        // alone — an audio plugin source is not a video add-on.
+        XCTAssertFalse(Addon(addonid: "plugin.audio.spotify",
+                             type: "xbmc.python.pluginsource").isVideoAddon)
+        XCTAssertTrue(Addon(addonid: "plugin.video.jellycon",
+                            type: "xbmc.python.pluginsource").isVideoAddon)
+    }
+
+    /// A disabled add-on must stay decodable and listed, because the only way to
+    /// turn it back on is the action offered on it.
+    func testDisabledAddonDecodesAsDisabled() throws {
+        let payload = try result(ListPayload.self, from: Self.liveAddons)
+        let disabled = try XCTUnwrap(payload.addons?.first { !$0.enabled })
+        XCTAssertEqual(disabled.addonid, "script.module.requests")
         XCTAssertEqual(disabled.displayName, "Requests")
     }
 
     func testAddonFieldsAreOptional() throws {
-        // Only addonid is guaranteed; a missing name falls back to the id and a
-        // missing type to a readable heading.
+        // Only addonid is guaranteed; a missing name falls back to the id.
         let payload = try result(ListPayload.self, from:
             #"{"jsonrpc":"2.0","id":1,"result":{"addons":[{"addonid":"x.y.z"}],"limits":{"start":0,"end":1,"total":1}}}"#)
         let addon = try XCTUnwrap(payload.addons?.first)
         XCTAssertEqual(addon.displayName, "x.y.z")
-        XCTAssertEqual(addon.typeLabel, "Other")
+        XCTAssertFalse(addon.isVideoAddon)
         XCTAssertFalse(addon.enabled)
     }
 
