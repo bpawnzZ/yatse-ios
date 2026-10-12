@@ -335,12 +335,23 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertEqual(AppModel.actionForPlayback("right", seeking: false), "right")
     }
 
-    /// A video playing fullscreen is no reason for up/down to stop moving or for
-    /// select to stop selecting — seeking must not swallow the rest of the pad.
+    /// A video playing fullscreen is no reason for up/down to stop moving. Seeking
+    /// must not swallow the rest of the pad — `select` is deliberately absent here
+    /// because the centre *does* change meaning there; see the next test.
     func testSeekingLeavesEveryOtherActionAlone() {
-        for action in ["up", "down", "select"] {
+        for action in ["up", "down"] {
             XCTAssertEqual(AppModel.actionForPlayback(action, seeking: true), action)
         }
+    }
+
+    /// The centre raises the controls bar while a video plays fullscreen — `osd`,
+    /// which is what a keyboard's Enter sends on a playing video. With the bar up,
+    /// Kodi's current window is the OSD (12901) rather than fullscreen video (12005),
+    /// so the gate goes false and the centre selects again, activating the focused
+    /// control. The window id carries that state, so nothing else has to track it.
+    func testCentreButtonRaisesTheControlsBarWhileFullscreenPlayback() {
+        XCTAssertEqual(AppModel.actionForPlayback("select", seeking: true), "osd")
+        XCTAssertEqual(AppModel.actionForPlayback("select", seeking: false), "select")
     }
 
     /// The `o` overlay only exists during fullscreen playback, so the button asks

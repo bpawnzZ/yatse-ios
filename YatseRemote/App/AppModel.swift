@@ -201,7 +201,8 @@ final class AppModel: ObservableObject {
     var isSeeking: Bool { playerid != nil && playbackIsFullscreen }
 
     /// Fullscreen playback is the one context where Kodi reads the arrow keys as
-    /// seeks, so left/right become the step actions there.
+    /// seeks, so left/right become the step actions there, and where the centre
+    /// raises the controls bar instead of selecting.
     ///
     /// The escalation — 10s, then 30s, 1min, 3min, 5min as the presses repeat — is
     /// Kodi's own progressive jump, the same one it gives a keyboard, so the app
@@ -210,13 +211,22 @@ final class AppModel: ObservableObject {
     /// rather than seek: the keymap binds arrow keys to the step actions in
     /// Fullscreen video, and an action bypasses that binding.)
     ///
-    /// `up`, `down` and `select` keep their meaning everywhere, so this cannot
-    /// strand navigation while a video plays on in the background.
+    /// The centre sends `osd`, which is what a keyboard's Enter sends on a playing
+    /// video — there is no "show OSD" action, only this toggle. Once the bar is up,
+    /// Kodi's current window becomes the OSD (**12901**, distinct from fullscreen
+    /// video's 12005 — measured on this box), so `isSeeking` goes false by itself:
+    /// the centre then activates the focused control and left/right navigate the
+    /// bar, exactly as they should. The window id carries the state, so no second
+    /// flag is needed to know whether the bar is already open.
+    ///
+    /// `up` and `down` keep their meaning everywhere, so this cannot strand
+    /// navigation while a video plays on in the background.
     static func actionForPlayback(_ action: String, seeking: Bool) -> String {
         guard seeking else { return action }
         switch action {
         case TouchKey.left.rawValue: return "stepback"
         case TouchKey.right.rawValue: return "stepforward"
+        case TouchKey.select.rawValue: return "osd"
         default: return action
         }
     }
