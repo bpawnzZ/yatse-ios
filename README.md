@@ -14,28 +14,12 @@ A Kodi remote for your pocket: it finds your box, remembers it, and hands you th
 library, the playback controls and the remote itself. No account, no server in the
 middle, nothing held back.
 
-> ## Unofficial — a personal build
->
-> This is **not an official app**, and not an official build of anything. It is one
-> person's project: no company, foundation or upstream project stands behind it, and
-> nobody distributes it but this repository. Every build carries that in its release
-> notes and shows it in the app under **About / Help**.
->
-> It is **not affiliated with, authorised by, sponsored by or endorsed by**:
->
-> - **Team Kodi / the XBMC Foundation.** This is an independent client that speaks
->   Kodi's public JSON-RPC API. No Kodi code, iconography or artwork is included. The
->   Kodi project does not support this app, and bug reports do not belong with them.
-> - **Yatse or its author.** The Android app was studied to learn the *protocol*; its
->   name is used only to say what this was specified from. This is not a port, a fork
->   or a re-release of Yatse, and it contains none of its code, strings or artwork.
-> - **Apple.** No developer account is involved anywhere: the IPA is unsigned and is
->   re-signed on your own device with your own Apple ID.
->
-> "Kodi", "XBMC" and "Yatse" are the trademarks of their respective owners, used here
-> descriptively to say what this app talks to and what it was written against — with
-> no claim to them. If a rights holder objects to any use in this repo, open an issue
-> and it will be changed.
+> **Unofficial, personal build — not affiliated with Team Kodi, Yatse or Apple.**
+> One person's project: no company, foundation or upstream project stands behind it,
+> and nobody distributes it but this repository. Every build says so in its release
+> notes and in the app under **About / Help**. It contains no Kodi or Yatse code,
+> strings or artwork, and no developer account is involved anywhere — the full
+> statement is under [Trademarks and affiliation](#trademarks-and-affiliation).
 
 A from-scratch SwiftUI remote for Kodi, written against a specification
 reverse-engineered from the **Yatse 12.0.0** Android APK. Clean-room: the
@@ -43,24 +27,15 @@ protocol surface (method names, parameter properties, discovery records, default
 ports) came from static analysis of the shipped artifact; the Swift here is
 original code written from that spec and the public Kodi JSON-RPC v13 docs.
 
-The full reverse-engineering report lives outside this repo with the APK:
-
-```
-~/reverseEngineer/yatse/REPORT.md      # findings, evidence IDs, method tables
-~/reverseEngineer/yatse/probe-evidence.txt   # live Kodi 21.3 payload validation
-```
-
-See [`docs/CLEANROOM.md`](docs/CLEANROOM.md) for what was and was not taken.
-
 ## Screenshots
 
 <table>
   <tr>
     <td align="center" width="50%">
-      <a href="docs/screenshots/remote.jpg"><img src="docs/screenshots/remote.jpg" width="330" alt="The Remote screen"></a>
+      <a href="docs/screenshots/remote-framed.png"><img src="docs/screenshots/remote-framed.png" width="320" alt="The Remote screen"></a>
     </td>
     <td align="center" width="50%">
-      <a href="docs/screenshots/drawer.jpg"><img src="docs/screenshots/drawer.jpg" width="330" alt="The drawer open"></a>
+      <a href="docs/screenshots/drawer-framed.png"><img src="docs/screenshots/drawer-framed.png" width="320" alt="The drawer open"></a>
     </td>
   </tr>
   <tr>
@@ -69,10 +44,14 @@ See [`docs/CLEANROOM.md`](docs/CLEANROOM.md) for what was and was not taken.
   </tr>
 </table>
 
-Tap either one for the full-size image. The drawer control stays pinned top-left,
-including on the screens pushed inside a destination, so you can leave a folder for
-the Remote without first going back to the top — and every browse screen now carries
-a Remote button of its own, in the toolbar next to the layout control.
+Tap either one for the full-size image. The pair is side by side rather than stacked
+so the first screenful of this page is still the pitch and the feature list, not two
+full-width phone screenshots.
+
+The drawer control stays pinned top-left on the screens pushed inside a destination,
+so you can leave a folder for the Remote without first going back to the top — and
+every browse screen now carries a Remote button of its own, in the toolbar next to the
+layout control.
 
 ## What it does
 
@@ -82,10 +61,13 @@ a Remote button of its own, in the toolbar next to the layout control.
 | Discovery | Bonjour `_xbmc-jsonrpc-h._tcp` / `_xbmc-jsonrpc._tcp` |
 | Launch | reconnects to the last host you used; if it has gone or does not answer, the picker comes back with the reason |
 | Now playing | full-screen overlay opened from the mini-player: see-through artwork backdrop, a seek slider with elapsed/duration, and Info |
-| Transport | previous / rewind / play-pause / forward / next / stop in the Now Playing overlay; back, fullscreen, info, keyboard and context tiles on the remote |
+| Transport | previous / rewind / play-pause / forward / next / stop in the Now Playing overlay; fullscreen, info, keyboard and menu tiles on the remote; while a video plays fullscreen the arrow keys seek, and Kodi escalates the jump on its own — 10s → 30s → 1min → 3min → 5min |
 | Streams | audio-stream and subtitle pickers (including subtitles off) and a video-zoom control, in the Now Playing overlay |
 | Shell | host-centric: slide-out drawer (Home, Movies, TV Shows, Music, Pvr, Files, Addons, Favorites, Remote, then Settings and About) with a host header and switcher, a persistent mini-player while a player is active, and a Remote button on every browse screen's toolbar |
-| Remote | one screen (no tabs): pinned status, shortcut, volume and utility tile rows; a directional pad that fills the screen below them (accent arrows, outlined select), a bare Back control and a touchpad toggle; keyboard text entry; the current item's artwork as a blurred background with translucent tiles while playing |
+| Remote | one screen (no tabs): pinned status, shortcut, volume and utility tile rows; a directional pad that fills the screen below them (accent arrows, outlined select), a bare Back control and a touchpad toggle; keyboard text entry; the current item's artwork as a blurred background with translucent tiles while playing; during fullscreen playback the pad's centre press raises Kodi's on-screen controls instead of selecting |
+| Player info | the far-left utility tile asks Kodi for its process overlay — resolution, video and audio codec, hardware or software decoding — and asks again to close it |
+| Touchpad | swipe to move, tap to select: how far and how fast you swipe decides how far Kodi moves, up to 8 steps from one gesture |
+| Gestures | pull up on the playback bar to open the full player, pull down on it to close; a sideways drag does neither, because that bar is made of buttons you drag across; long press a tile or row to save it as a favourite |
 | Queue | playlist jump / remove / clear, shown in the Now Playing overlay |
 | Library | Movies and TV Shows, Artists → Albums, and a show's episodes; paged at 60 rows, tap to play |
 | Layout | one app-wide setting — **2-wide grid, the default**, or 3-wide, 4-wide and a list — switched from any browse screen's toolbar and remembered across launches |
@@ -108,7 +90,8 @@ rather than at a list you have to read.
   Selecting the current host again is a no-op; deleting the active host returns
   the app to the picker. **Each destination remembers the place you last reached
   inside it** for the session, so leaving Addons for the Remote and coming back
-  restores that folder rather than resetting to the top.
+  restores that folder rather than resetting to the top — and a long list also comes
+  back at the row you had scrolled to.
 - **Mini-player** — pinned above every destination while a player is active, with
   a thumbnail, the title, and stop / play-pause / next. Tapping it opens the
   Now Playing overlay.
@@ -117,10 +100,16 @@ rather than at a list you have to read.
   play-pause / forward / next / stop, repeat and shuffle, Info, audio and subtitle
   pickers (subtitles can be turned off), a video-zoom control, and the queue.
 - **Remote** — a single screen with no tabs that does not scroll: the app bar, the
-  shortcut strip (Home, Movies, TV Shows, Music, Pictures), volume and utility
-  tiles, then a directional pad that fills every point left on the screen, with a
-  bare Back arrow and a touchpad toggle beneath it. While something plays, the
-  item's artwork is the blurred background and the tiles turn translucent.
+  shortcut strip (Home, Movies, TV Shows, Music, Pictures), the volume tiles, the
+  utility row (player info, fullscreen, info, keyboard, menu), then a directional pad
+  that fills every point left on the screen, with a bare Back arrow and a touchpad
+  toggle beneath it. While something plays, the item's artwork is the blurred
+  background and the tiles turn translucent. **While a video plays fullscreen the pad
+  changes job**: the arrows seek, and the centre press raises Kodi's on-screen
+  controls, because that is what a video wants — moving a highlight is for menus.
+  The far-left utility tile is the player-info overlay (resolution, codecs, and
+  whether decoding is hardware or software); inside fullscreen playback it is what
+  you reach for instead of guessing why a file stutters.
 - **Library** — Movies and TV Shows, Artists → Albums, and a show's episodes.
 - **Layout** — one app-wide setting rather than a per-screen one, because these are
   all the same kind of screen: **2-wide grid (the default)**, 3-wide, 4-wide, or a
@@ -307,6 +296,14 @@ ports — facts about an interface, not creative expression.
 No Yatse code, resources, strings or artwork are used, and no decompiled body was
 ever copied. "Yatse" is the name of the Android app this was specified from, not
 the name of this project.
+
+The artifacts that specification came out of live with the APK on a development
+host, not in this repo:
+
+```
+~/reverseEngineer/yatse/REPORT.md            # findings, evidence IDs, method tables
+~/reverseEngineer/yatse/probe-evidence.txt   # live Kodi 21.3 payload validation
+```
 
 ### Trademarks and affiliation
 
