@@ -162,10 +162,18 @@ final class AppModel: ObservableObject {
 
     // MARK: Commands
 
+    /// Send one command, optionally repeated. Each repeat is its own round trip, so
+    /// the refresh happens once at the end: a five-step swipe should cost five key
+    /// presses, not five key presses plus five state polls.
     @MainActor
-    func send(_ method: String, _ params: [String: Any] = [:]) async {
+    func send(_ method: String, _ params: [String: Any] = [:], times: Int = 1) async {
         do {
-            _ = try await client.call(method, params: params, as: IgnoreResult.self)
+            // ponytail: one POST per repeat. Kodi's JSON-RPC does accept a batch
+            // array in a single POST if a long flick ever measures as laggy; it
+            // does not accept a repeat count on Input.ExecuteAction.
+            for _ in 0..<max(1, times) {
+                _ = try await client.call(method, params: params, as: IgnoreResult.self)
+            }
             lastError = nil
             await refresh(light: true)
         } catch {
@@ -176,8 +184,8 @@ final class AppModel: ObservableObject {
     /// Remote-control action names recovered from the Yatse DEX
     /// (`Input.ExecuteAction` call sites).
     @MainActor
-    func key(_ action: String) async {
-        await send("Input.ExecuteAction", ["action": action])
+    func key(_ action: String, times: Int = 1) async {
+        await send("Input.ExecuteAction", ["action": action], times: times)
     }
 
     @MainActor
