@@ -192,13 +192,12 @@ final class KodiModelTests: XCTestCase {
         XCTAssertEqual(icon.scheme, "http")
         XCTAssertEqual(icon.host, "10.13.13.7")
         XCTAssertEqual(icon.port, 8080)
-        XCTAssertEqual(icon.percentEncodedPath,
-                       "/image/%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png")
+        XCTAssertEqual(icon.absoluteString,
+                       "http://10.13.13.7:8080/image/%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png")
 
         XCTAssertEqual(
-            Artwork.url("image://special%3a%2f%2fhome%2faddons%2fx.png", host: host)?
-                .percentEncodedPath,
-            "/image/special%3a%2f%2fhome%2faddons%2fx.png"
+            Artwork.url("image://special%3a%2f%2fhome%2faddons%2fx.png", host: host)?.absoluteString,
+            "http://10.13.13.7:8080/image/special%3a%2f%2fhome%2faddons%2fx.png"
         )
 
         // Library art is already absolute; it is not routed through the host.

@@ -126,7 +126,8 @@ final class FavoritesTests: XCTestCase {
         let withArt = Favorite(title: "Subscriptions",
                                target: .directory(path: "plugin://plugin.video.youtube/special/x"),
                                thumbnail: "image://%2fstorage%2ficon.png")
-        XCTAssertEqual(withArt.artworkURL(host: host)?.percentEncodedPath, "/image/%2fstorage%2ficon.png")
+        XCTAssertEqual(withArt.artworkURL(host: host)?.absoluteString,
+                       "http://10.13.13.7:8080/image/%2fstorage%2ficon.png")
 
         XCTAssertNil(Favorite(title: "Bare", target: .directory(path: "/media/films")).artworkURL(host: host))
     }
