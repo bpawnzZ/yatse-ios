@@ -15,6 +15,19 @@ The full reverse-engineering report lives outside this repo with the APK:
 
 See [`docs/CLEANROOM.md`](docs/CLEANROOM.md) for what was and was not taken.
 
+## Screenshots
+
+The Remote. The drawer control stays pinned top-left, including on the screens
+pushed inside a destination, so you can leave a folder for the Remote without
+first going back to the top:
+
+![The Remote screen](docs/screenshots/remote.jpg)
+
+The drawer. Favorites is a destination, and each destination remembers the place
+you last reached inside it for the session:
+
+![The drawer open](docs/screenshots/drawer.jpg)
+
 ## What it does
 
 | Area | Implemented |

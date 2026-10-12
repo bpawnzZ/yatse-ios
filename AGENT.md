@@ -15,11 +15,15 @@ decompiled code bodies are copied. See `README.md` and `docs/CLEANROOM.md`.
   trusting a hash written here.** This file deliberately no longer pins a HEAD
   sha or run IDs — they went stale within a day, and a stale handoff is worse
   than none. `gh run list --limit 5` is the live answer.
-- **Last recorded test count: 98 passing, 0 failures.** The suite has grown since
-  (the add-on/favourites/grid change added cases); the PR's "Unit tests" run is
-  the current number. Previous milestones: #8 = 93 tests, #7 = 76.
-- **The latest IPA sent to Alpha's Telegram:** message 453 in `hermes_2` topic 7.
-  Re-sends are fine; the send script verifies the hash before uploading.
+- **Last recorded test count: 117 passing, 0 failures** (PR #11). The suite grows
+  with every change; the PR's "Unit tests" run is the current number. Milestones:
+  #10 = 113, #9 = 98, #8 = 93, #7 = 76.
+- **The repo is public** since 2026-10-12, so macOS runner minutes are no longer
+  billed at the private-repo 10× rate. Batching pushes is still polite, not
+  expensive.
+- **The latest IPA sent to Alpha's Telegram:** message 457 in `hermes_2` topic 7
+  (main `22d4d02`, PR #11). Re-sends are fine; the send script verifies the hash
+  before uploading.
 - **There is no Swift toolchain on this box.** `which swiftc` is empty. CI is the
   only compiler: never claim a Swift change builds, or a test passes, until a run
   says so. A green build is `xcodebuild` on a GitHub macOS runner, not a local
@@ -30,10 +34,10 @@ decompiled code bodies are copied. See `README.md` and `docs/CLEANROOM.md`.
   failing on every call, and the Pvr-sized assumptions about add-ons. **Nothing
   visual is verified until he says so** — CI can compile and unit-test, and cannot
   see the screen.
-- Repo is **private**. macOS runner minutes bill at a **10× multiplier** (GitHub
-  Free: 2,000 min/month ≈ 200 macOS minutes). Every commit to `main` — even a
-  docs-only one — burns a macOS run, because there is no `paths-ignore`.
-  Flipping the repo public makes macOS minutes free.
+- Repo is **public** since 2026-10-12, so GitHub's free macOS runner minutes apply
+  (a public repo is not billed the private-repo **10× multiplier**). Every commit to
+  `main` — even a docs-only one — still *runs* a build, because there is no
+  `paths-ignore`; it is just no longer expensive.
 - Open items are listed at the end under **Next steps**.
 
 ## How work ships here
@@ -471,5 +475,6 @@ gh run view <test-run-id> --log | grep "Executed .* tests"
    deliberately so: Plex/Emby/Jellyfin backends, DLNA casting, offline
    download/transcode, and the APK's custom-command editor (~80 lines, omitted).
 6. **Archive `add-now-playing-and-library-grid`** in openspec (it is complete).
-7. **Consider `paths-ignore` on both workflows** so docs-only commits stop burning
-   a 10× macOS run.
+7. **Consider `paths-ignore` on both workflows** so docs-only commits stop running
+   a build. No longer urgent — the repo is public, so those runs are free — but it
+   still shortens the feedback noise on a docs change.

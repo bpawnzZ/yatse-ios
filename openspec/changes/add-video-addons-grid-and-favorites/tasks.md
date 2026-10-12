@@ -45,7 +45,7 @@
 
 - [x] 7.1 Re-run the read-only add-on probe against the live host (no `Addons.ExecuteAddon`, no `Addons.SetAddonEnabled`, no `Input.*`) and confirm the six video add-ons it lists are the ones the filter admits, recording which of them answer a browse at their plugin root; verify the recorded output matches what the filter shows.
 - [x] 7.2 Push the branch, open the PR, and confirm both `build-ipa.yml` and `tests.yml` are green on the same commit, reading the test run's failure log rather than its checkmark; report both run IDs and the test count. — green on `8483a15` in PR #10: build `38193633380`, tests `38193633389`, **113 tests, 0 failures**. The first attempt at this (tests `38193409417`) failed to *compile* the test target — `URL.percentEncodedPath` does not exist — while the app target built green in the same push (build `38193409449`), which is why the failure log, not the checkmark, is the evidence.
-- [ ] 7.3 Send the main build's IPA with `~/.local/bin/send-yatse-ipa`, and confirm the send script's hash check and read-back both pass; verify the message it reports matches the commit.
+- [x] 7.3 Send the main build's IPA with `~/.local/bin/send-yatse-ipa`, and confirm the send script's hash check and read-back both pass; verify the message it reports matches the commit. — sent from main build `38194016279` on `37b4c0d` as Telegram message **455** in `hermes_2` topic 7; hash check passed and the read-back found the document.
 
 ## Workflow follow-up
 
@@ -54,9 +54,6 @@
   screen, returning to Addons landing on the place last visited, and the
   favourites grid rendering posters — there is no Mac in the development loop, so
   CI can compile and unit-test but cannot see the screen.
-- Task 7.3 is deliberately left unticked: it is a post-merge release step, and the
-  only way to tick it in a commit would be to burn a macOS run (10× billing) on a
-  docs-only push, or to tick it before it was true.
 - Archive `add-now-playing-and-library-grid`, which is complete (14/14) and still
   unarchived, and archive this change once the project's review requirements are
   satisfied.
