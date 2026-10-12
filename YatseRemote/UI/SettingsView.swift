@@ -59,11 +59,22 @@ struct AboutScreen: View {
     var body: some View {
         List {
             Section {
-                LabeledContent("Name", value: "Yatse Remote")
+                LabeledContent("Name", value: "Yatse Remote (unofficial)")
                 LabeledContent("Version", value: SettingsView.version)
             }
             Section("Help") {
                 Text("Yatse Remote controls a Kodi media centre over the local network.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            // Kept in the app, not just the README: this installs from a sideloaded
+            // IPA on someone's own device, and it should say what it is without them
+            // having to find the repository first.
+            Section("Unofficial build") {
+                Text("A personal project — not an official app, and not an official build of anything. Not affiliated with, authorised by or endorsed by Team Kodi / the XBMC Foundation, by Yatse or its author, or by Apple.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Text("Kodi and Yatse are named only to say what this talks to and what it was written against. No code, strings or artwork from either is included, and no developer account sits behind it.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }

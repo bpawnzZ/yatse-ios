@@ -10,6 +10,29 @@
 — an unsigned IPA you re-sign with your own Apple ID. No developer account, no
 App Store, every feature unlocked.
 
+> ## Unofficial — a personal build
+>
+> This is **not an official app**, and not an official build of anything. It is one
+> person's project: no company, foundation or upstream project stands behind it, and
+> nobody distributes it but this repository. Every build carries that in its release
+> notes and shows it in the app under **About / Help**.
+>
+> It is **not affiliated with, authorised by, sponsored by or endorsed by**:
+>
+> - **Team Kodi / the XBMC Foundation.** This is an independent client that speaks
+>   Kodi's public JSON-RPC API. No Kodi code, iconography or artwork is included. The
+>   Kodi project does not support this app, and bug reports do not belong with them.
+> - **Yatse or its author.** The Android app was studied to learn the *protocol*; its
+>   name is used only to say what this was specified from. This is not a port, a fork
+>   or a re-release of Yatse, and it contains none of its code, strings or artwork.
+> - **Apple.** No developer account is involved anywhere: the IPA is unsigned and is
+>   re-signed on your own device with your own Apple ID.
+>
+> "Kodi", "XBMC" and "Yatse" are the trademarks of their respective owners, used here
+> descriptively to say what this app talks to and what it was written against — with
+> no claim to them. If a rights holder objects to any use in this repo, open an issue
+> and it will be changed.
+
 A from-scratch SwiftUI remote for Kodi, written against a specification
 reverse-engineered from the **Yatse 12.0.0** Android APK. Clean-room: the
 protocol surface (method names, parameter properties, discovery records, default
@@ -259,3 +282,19 @@ ports — facts about an interface, not creative expression.
 No Yatse code, resources, strings or artwork are used, and no decompiled body was
 ever copied. "Yatse" is the name of the Android app this was specified from, not
 the name of this project.
+
+### Trademarks and affiliation
+
+An **unofficial, personal** project. Not affiliated with, authorised by, sponsored
+by or endorsed by Team Kodi / the XBMC Foundation, by Yatse or its author, or by
+Apple — and not an official build of any of them. No Kodi or Yatse code, strings,
+iconography or artwork is included, and no developer account sits behind it.
+
+"Kodi", "XBMC" and "Yatse" are the trademarks of their respective owners. They
+appear here only to identify what this app talks to and what it was specified from:
+nominative use, with no claim to the marks and no implication of endorsement. If a
+rights holder would rather a name were not used this way, open an issue and it will
+be changed or removed.
+
+MIT covers the code in this repository. It grants nothing in anyone else's
+trademarks, and it does not make this an official client of anything.

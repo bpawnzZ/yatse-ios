@@ -117,7 +117,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="build-${{ github.run_number }}"
-          NOTES=$(printf 'Unsigned IPA built from `main` at `%s`.\n\nThis build carries no signature and is re-signed on device (SideStore, AltStore or Sideloadly) — that is why no Apple developer account sits behind this repo. It does not install as-is.\n\nAssets: `YatseRemote-unsigned.ipa` and its `sha256`.\n' "$GITHUB_SHA")
+          NOTES=$(printf 'Unsigned IPA built from `main` at `%s`.\n\nThis build carries no signature and is re-signed on device (SideStore, AltStore or Sideloadly) — that is why no Apple developer account sits behind this repo. It does not install as-is.\n\nUnofficial personal build: not an official app and not an official build of anything, and not affiliated with, authorised by or endorsed by Team Kodi / the XBMC Foundation, by Yatse or its author, or by Apple. Kodi and Yatse are named only to say what this talks to and what it was written against. No code, strings or artwork from either is included.\n\nAssets: `YatseRemote-unsigned.ipa` and its `sha256`.\n' "$GITHUB_SHA")
 
           gh release create "$TAG" \
             --target "$GITHUB_SHA" \
