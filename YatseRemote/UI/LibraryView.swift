@@ -110,7 +110,8 @@ struct LibraryView: View {
     private func listRow(for item: MediaItem) -> some View {
         if let child = section.childRequest(for: item) {
             NavigationLink {
-                ChildrenView(model: model, request: child, heading: item.heading)
+                ChildrenView(model: model, request: child, heading: item.heading,
+                             onOpenDrawer: onOpenDrawer)
             } label: {
                 MediaRow(item: item, username: model.host.username, password: model.password, showsChevron: true)
             }
@@ -128,7 +129,8 @@ struct LibraryView: View {
     private func gridCell(for item: MediaItem) -> some View {
         if let child = section.childRequest(for: item) {
             NavigationLink {
-                ChildrenView(model: model, request: child, heading: item.heading)
+                ChildrenView(model: model, request: child, heading: item.heading,
+                             onOpenDrawer: onOpenDrawer)
             } label: {
                 PosterTile(item: item, username: model.host.username, password: model.password)
             }
@@ -202,24 +204,44 @@ struct FavoriteButton: View {
 }
 
 /// One grid tile: poster artwork with the title and detail line beneath.
+///
+/// Parameterised rather than `MediaItem`-typed so the add-on, favourite and
+/// library grids all render the same tile. The alternative was a second tile
+/// type, free to drift from this one — which is how the Movies tile once went
+/// blank.
 struct PosterTile: View {
-    let item: MediaItem
+    let url: URL?
+    let title: String
+    let detail: String
     let username: String
     let password: String
 
+    init(url: URL?, title: String, detail: String, username: String, password: String) {
+        self.url = url
+        self.title = title
+        self.detail = detail
+        self.username = username
+        self.password = password
+    }
+
+    /// The library grid's tile: artwork and text come from the item.
+    init(item: MediaItem, username: String, password: String) {
+        self.init(url: Artwork.poster(for: item.art, thumbnail: item.thumbnail),
+                  title: item.heading,
+                  detail: item.detailLine,
+                  username: username,
+                  password: password)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            PosterImage(
-                url: Artwork.poster(for: item.art, thumbnail: item.thumbnail),
-                username: username,
-                password: password
-            )
-            Text(item.heading)
+            PosterImage(url: url, username: username, password: password)
+            Text(title)
                 .font(.subheadline)
                 .lineLimit(2)
                 .foregroundStyle(.primary)
-            if !item.detailLine.isEmpty {
-                Text(item.detailLine)
+            if !detail.isEmpty {
+                Text(detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -229,11 +251,106 @@ struct PosterTile: View {
     }
 }
 
+/// The long-press menu item that saves a place, or removes it when it is already
+/// saved. Shared by the add-on grid, the library rows and the folders inside an
+/// add-on, so a long press means one thing everywhere.
+struct FavoriteMenuItem: View {
+    let favorite: Favorite
+
+    @EnvironmentObject private var favorites: FavoriteStore
+
+    var body: some View {
+        let saved = favorites.contains(favorite.target)
+        Button(saved ? "Remove favorite" : "Add to Favorites",
+               systemImage: saved ? "star.slash" : "star") {
+            if saved {
+                favorites.remove(favorite)
+            } else {
+                favorites.toggle(favorite)
+            }
+        }
+    }
+}
+
+/// The Favorites destination: the saved places as a two-column poster grid, built
+/// from the same tile as the library and add-on grids.
+///
+/// A favourite remembers the artwork of the place it was saved from, so the grid
+/// has posters; one saved before artwork was recorded shows the placeholder.
+struct FavoritesScreen: View {
+    @ObservedObject var model: AppModel
+    let onOpenDrawer: () -> Void
+    let onOpen: (Favorite) -> Void
+
+    @EnvironmentObject private var favorites: FavoriteStore
+
+    var body: some View {
+        Group {
+            if favorites.items.isEmpty {
+                Text("Nothing saved yet. Long-press a folder inside a video add-on to save it here.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding()
+            } else {
+                ScrollView {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12),
+                        ],
+                        spacing: 16
+                    ) {
+                        ForEach(favorites.items) { favorite in
+                            Button { onOpen(favorite) } label: { tile(favorite) }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("Remove favorite", role: .destructive) {
+                                        favorites.remove(favorite)
+                                    }
+                                }
+                        }
+                    }
+                    .padding()
+                }
+            }
+        }
+        .navigationTitle("Favorites")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
+                    .accessibilityLabel("Open menu")
+            }
+        }
+        .themedScreen()
+    }
+
+    private func tile(_ favorite: Favorite) -> some View {
+        PosterTile(url: favorite.artworkURL(host: model.host),
+                   title: favorite.title,
+                   detail: Self.detailLine(for: favorite.target),
+                   username: model.host.username,
+                   password: model.password)
+    }
+
+    /// What kind of place this favourite points at, for the tile's second line.
+    static func detailLine(for target: FavoriteTarget) -> String {
+        switch target {
+        case .section(let raw): return LibrarySection(rawValue: raw)?.title ?? "Library"
+        case .episodes: return "Episodes"
+        case .albumsOfArtist: return "Albums"
+        case .directory(let path): return path.hasPrefix("plugin://") ? "Add-on" : "Folder"
+        }
+    }
+}
+
 /// Episodes of a show, or albums of an artist.
 struct ChildrenView: View {
     @ObservedObject var model: AppModel
     let request: ChildrenRequest
     let heading: String
+    var onOpenDrawer: (() -> Void)? = nil
 
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
@@ -267,6 +384,12 @@ struct ChildrenView: View {
         .navigationTitle(request.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if let onOpenDrawer {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
+                        .accessibilityLabel("Open menu")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 FavoriteButton(title: heading, target: request.favoriteTarget)
             }
@@ -302,7 +425,8 @@ struct FilesScreen: View {
         List {
             ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
                 NavigationLink {
-                    DirectoryView(model: model, path: source.file, title: source.heading)
+                    DirectoryView(model: model, path: source.file, title: source.heading,
+                                  onOpenDrawer: onOpenDrawer)
                 } label: {
                     MediaRow(item: source, username: model.host.username, password: model.password, showsChevron: true)
                 }
@@ -355,24 +479,63 @@ struct FilesScreen: View {
 }
 
 /// One folder on the media centre. Folders drill down; anything else plays.
+///
+/// Shared by the Files browser and by add-on content. Which layout it uses is
+/// derived from the path rather than passed in, so no caller has to remember to
+/// say which it is — and a favourite opened on a plugin folder reopens the way it
+/// was saved.
 struct DirectoryView: View {
     @ObservedObject var model: AppModel
     let path: String
     let title: String
+    var onOpenDrawer: (() -> Void)? = nil
 
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
     @State private var error: String?
 
+    /// Add-on content browses as a poster grid, matching the library; a
+    /// filesystem folder — the Files browser — stays a list.
+    static func layout(forPath path: String) -> LibraryLayout {
+        path.hasPrefix("plugin://") ? .grid : .list
+    }
+
     var body: some View {
+        Group {
+            switch Self.layout(forPath: path) {
+            case .list: list
+            case .grid: grid
+            }
+        }
+        .overlay { emptyState }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if let onOpenDrawer {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
+                        .accessibilityLabel("Open menu")
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                FavoriteButton(title: title, target: .directory(path: path))
+            }
+        }
+        .themedScreen()
+        .task { await load() }
+    }
+
+    private var list: some View {
         List {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 if item.isDirectory {
                     NavigationLink {
-                        DirectoryView(model: model, path: item.file, title: item.heading)
+                        DirectoryView(model: model, path: item.file, title: item.heading,
+                                      onOpenDrawer: onOpenDrawer)
                     } label: {
                         MediaRow(item: item, username: model.host.username, password: model.password, showsChevron: true)
                     }
+                    .contextMenu { FavoriteMenuItem(favorite: Favorite(directoryEntry: item)) }
                 } else {
                     Button {
                         Task {
@@ -386,26 +549,64 @@ struct DirectoryView: View {
             }
         }
         .listStyle(.plain)
-        .overlay {
-            if items.isEmpty {
-                if isLoading {
-                    ProgressView()
-                } else {
-                    Text(error ?? "This folder is empty.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+    }
+
+    private var grid: some View {
+        ScrollView {
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 12),
+                    GridItem(.flexible(), spacing: 12),
+                ],
+                spacing: 16
+            ) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    if item.isDirectory {
+                        NavigationLink {
+                            DirectoryView(model: model, path: item.file, title: item.heading,
+                                          onOpenDrawer: onOpenDrawer)
+                        } label: {
+                            tile(item)
+                        }
+                        .contextMenu { FavoriteMenuItem(favorite: Favorite(directoryEntry: item)) }
+                    } else {
+                        Button {
+                            Task {
+                                if let payload = item.playableItem { await model.play(item: payload) }
+                            }
+                        } label: {
+                            tile(item)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
+            .padding()
         }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                FavoriteButton(title: title, target: .directory(path: path))
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        if items.isEmpty {
+            if isLoading {
+                ProgressView()
+            } else {
+                Text(error ?? "This folder is empty.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding()
             }
         }
-        .themedScreen()
-        .task { await load() }
+    }
+
+    /// Add-on artwork needs the host's image endpoint — see `Artwork.url(_:host:)`.
+    private func tile(_ item: MediaItem) -> some View {
+        PosterTile(url: Artwork.poster(for: item.art, thumbnail: item.thumbnail, host: model.host),
+                   title: item.heading,
+                   detail: item.detailLine,
+                   username: model.host.username,
+                   password: model.password)
     }
 
     private func load() async {

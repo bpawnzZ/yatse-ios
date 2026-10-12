@@ -13,14 +13,14 @@ final class ShellNavigationTests: XCTestCase {
     func testDrawerListsEveryDestinationInOrder() {
         XCTAssertEqual(
             ShellDestination.allCases.map(\.title),
-            ["Home", "Movies", "TV Shows", "Music", "Pvr", "Files", "Addons", "Remote", "Settings", "About / Help"]
+            ["Home", "Movies", "TV Shows", "Music", "Pvr", "Files", "Addons", "Favorites", "Remote", "Settings", "About / Help"]
         )
     }
 
     func testDrawerSplitsDestinationsFromSettingsAndAbout() {
         XCTAssertEqual(
             ShellDestination.destinations.map(\.title),
-            ["Home", "Movies", "TV Shows", "Music", "Pvr", "Files", "Addons", "Remote"]
+            ["Home", "Movies", "TV Shows", "Music", "Pvr", "Files", "Addons", "Favorites", "Remote"]
         )
         XCTAssertEqual(ShellDestination.secondary, [.settings, .about])
     }
@@ -57,8 +57,72 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertFalse(ShellDestination.pvr.isImplemented)
         XCTAssertTrue(ShellDestination.files.isImplemented)
         XCTAssertTrue(ShellDestination.addons.isImplemented)
+        XCTAssertTrue(ShellDestination.favorites.isImplemented)
         XCTAssertTrue(ShellDestination.remote.isImplemented)
         XCTAssertTrue(ShellDestination.settings.isImplemented)
+    }
+
+    // MARK: Destination navigation memory
+
+    private func place(_ title: String, _ path: String) -> Favorite {
+        Favorite(title: title, target: .directory(path: path))
+    }
+
+    func testUnvisitedDestinationHasNothingPushed() {
+        XCTAssertTrue(NavigationMemory().path(for: .addons).isEmpty)
+    }
+
+    func testRecordedPlaceIsRestoredForItsOwnDestination() {
+        var memory = NavigationMemory()
+        let saved = place("Subscriptions", "plugin://plugin.video.youtube/special/my_subscriptions")
+        memory.record([saved], for: .addons)
+        XCTAssertEqual(memory.path(for: .addons), [saved])
+    }
+
+    func testRecordingOneDestinationLeavesAnotherAlone() {
+        var memory = NavigationMemory()
+        let addons = place("Subscriptions", "plugin://plugin.video.youtube/special/x")
+        let files = place("Films", "smb://nas/films/")
+        memory.record([addons], for: .addons)
+        memory.record([files], for: .files)
+        XCTAssertEqual(memory.path(for: .addons), [addons])
+        XCTAssertEqual(memory.path(for: .files), [files])
+    }
+
+    /// A destination left at its root remembers nothing, so returning to it lands
+    /// on the root rather than reopening a place that was already closed.
+    func testDestinationLeftAtItsRootRemembersNothing() {
+        var memory = NavigationMemory()
+        memory.record([place("Subscriptions", "plugin://x/")], for: .addons)
+        memory.record([], for: .addons)
+        XCTAssertTrue(memory.path(for: .addons).isEmpty)
+    }
+
+    /// Opening a favourite becomes that destination's place, which is what makes
+    /// leaving and coming back land where the user last was.
+    func testOpeningAFavouriteRecordsItAsThePlace() {
+        var memory = NavigationMemory()
+        let favourite = Favorite(title: "My Subscriptions",
+                                 target: .directory(path: "plugin://plugin.video.youtube/special/x"))
+        memory.record([favourite], for: .favorites)
+        XCTAssertEqual(memory.path(for: .favorites), [favourite])
+    }
+
+    // MARK: Directory layout
+
+    /// Add-on content browses as a grid and a filesystem folder as a list, decided
+    /// by the path so no caller has to remember which it is.
+    func testPluginContentBrowsesAsAGrid() {
+        XCTAssertEqual(DirectoryView.layout(forPath: "plugin://plugin.video.youtube/"), .grid)
+        XCTAssertEqual(
+            DirectoryView.layout(forPath: "plugin://plugin.video.youtube/special/my_subscriptions"),
+            .grid
+        )
+    }
+
+    func testFilesystemFoldersStayAList() {
+        XCTAssertEqual(DirectoryView.layout(forPath: "smb://nas/films/"), .list)
+        XCTAssertEqual(DirectoryView.layout(forPath: "/storage/movies"), .list)
     }
 
     // MARK: Icons

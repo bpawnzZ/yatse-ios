@@ -13,6 +13,7 @@ enum ShellDestination: String, CaseIterable, Identifiable {
     case pvr
     case files
     case addons
+    case favorites
     case remote
     case settings
     case about
@@ -28,6 +29,7 @@ enum ShellDestination: String, CaseIterable, Identifiable {
         case .pvr: return "Pvr"
         case .files: return "Files"
         case .addons: return "Addons"
+        case .favorites: return "Favorites"
         case .remote: return "Remote"
         case .settings: return "Settings"
         case .about: return "About / Help"
@@ -43,6 +45,7 @@ enum ShellDestination: String, CaseIterable, Identifiable {
         case .pvr: return "dot.radiowaves.left.and.right"
         case .files: return "folder"
         case .addons: return "puzzlepiece.extension"
+        case .favorites: return "star"
         case .remote: return "av.remote"
         case .settings: return "gearshape"
         case .about: return "info.circle"
@@ -54,7 +57,7 @@ enum ShellDestination: String, CaseIterable, Identifiable {
     var isImplemented: Bool {
         switch self {
         case .home, .movies, .tvShows, .music, .remote, .settings, .about,
-             .addons, .files:
+             .addons, .files, .favorites:
             return true
         case .pvr:
             return false
@@ -73,7 +76,7 @@ enum ShellDestination: String, CaseIterable, Identifiable {
 
     /// Destinations listed above the drawer divider, in Yatse's order.
     static let destinations: [ShellDestination] =
-        [.home, .movies, .tvShows, .music, .pvr, .files, .addons, .remote]
+        [.home, .movies, .tvShows, .music, .pvr, .files, .addons, .favorites, .remote]
 
     /// Destinations listed below the divider.
     static let secondary: [ShellDestination] = [.settings, .about]
@@ -114,17 +117,18 @@ enum RemoteShortcut: String, CaseIterable, Identifiable {
 }
 
 /// The slide-over navigation drawer: host header with a switcher and keyboard /
-/// mic / search actions, the destination list, the saved favourites, then
-/// Settings and About.
+/// mic / search actions, the destination list, then Settings and About.
+///
+/// Saved favourites are a destination of their own rather than one row each —
+/// a 300pt drawer cannot hold their poster grid, and one row per favourite
+/// grows without bound.
 struct AppDrawer: View {
     @EnvironmentObject private var session: Session
     @EnvironmentObject private var store: HostStore
-    @EnvironmentObject private var favorites: FavoriteStore
     @Environment(\.remoteTheme) private var theme
 
     let selected: ShellDestination
     let onSelect: (ShellDestination) -> Void
-    let onOpenFavorite: (Favorite) -> Void
 
     @State private var showingKeyboard = false
     @State private var showingSearch = false
@@ -138,14 +142,6 @@ struct AppDrawer: View {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(ShellDestination.destinations) { item in
                         itemRow(item)
-                    }
-
-                    if !favorites.items.isEmpty {
-                        Divider().padding(.vertical, 8)
-                        sectionLabel("Favorites")
-                        ForEach(favorites.items) { favorite in
-                            favoriteRow(favorite)
-                        }
                     }
 
                     Divider().padding(.vertical, 8)
@@ -222,33 +218,11 @@ struct AppDrawer: View {
         }
     }
 
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(theme.icon.opacity(0.6))
-            .padding(.horizontal, 16)
-            .padding(.bottom, 2)
-    }
-
     private func itemRow(_ item: ShellDestination) -> some View {
         row(symbol: item.systemImage,
             title: item.title,
             isSelected: item == selected) {
             onSelect(item)
-        }
-    }
-
-    /// A favourite looks like any other row, but carries its own remove action.
-    private func favoriteRow(_ favorite: Favorite) -> some View {
-        row(symbol: symbol(for: favorite.target),
-            title: favorite.title,
-            isSelected: false) {
-            onOpenFavorite(favorite)
-        }
-        .contextMenu {
-            Button("Remove favorite", role: .destructive) {
-                favorites.remove(favorite)
-            }
         }
     }
 
@@ -271,14 +245,5 @@ struct AppDrawer: View {
         }
         .buttonStyle(.plain)
         .foregroundStyle(isSelected ? theme.accent : theme.icon)
-    }
-
-    private func symbol(for target: FavoriteTarget) -> String {
-        switch target {
-        case .section(let raw): return LibrarySection(rawValue: raw)?.systemImage ?? "star"
-        case .episodes: return "list.bullet.rectangle"
-        case .albumsOfArtist: return "square.stack"
-        case .directory: return "folder"
-        }
     }
 }

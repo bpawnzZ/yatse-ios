@@ -24,10 +24,12 @@ See [`docs/CLEANROOM.md`](docs/CLEANROOM.md) for what was and was not taken.
 | Now playing | full-screen overlay opened from the mini-player: see-through artwork backdrop, a seek slider with elapsed/duration, and Info |
 | Transport | previous / rewind / play-pause / forward / next / stop in the Now Playing overlay; back, fullscreen, info, keyboard and context tiles on the remote |
 | Streams | audio-stream and subtitle pickers (including subtitles off) and a video-zoom control, in the Now Playing overlay |
-| Shell | host-centric: slide-out drawer (Home, Movies, TV Shows, Music, Pvr, Files, Addons, Remote, then Settings and About) with a host header and switcher, and a persistent mini-player while a player is active |
+| Shell | host-centric: slide-out drawer (Home, Movies, TV Shows, Music, Pvr, Files, Addons, Favorites, Remote, then Settings and About) with a host header and switcher, and a persistent mini-player while a player is active |
 | Remote | one screen (no tabs): pinned status, shortcut, volume and utility tile rows; a directional pad that fills the screen below them (accent arrows, outlined select), a bare Back control and a touchpad toggle; keyboard text entry; the current item's artwork as a blurred background with translucent tiles while playing |
 | Queue | playlist jump / remove / clear, shown in the Now Playing overlay |
 | Library | Movies and TV Shows as a two-column poster grid; Artists → Albums and Episodes as lists; paged at 60 rows, tap to play |
+| Addons | video add-ons only, as a two-column poster grid; tapping one browses the content it exposes on the host, also as a grid; long-press to enable/disable it or save it as a favourite |
+| Favorites | saved places as a two-column poster grid carrying their artwork; saved by long-pressing a folder inside a video add-on, removed by long-pressing the tile |
 | Status | connection state, server name + version, in-app error surface |
 | Self-check | ordered, read-only, per-layer connection diagnostic with a copyable redacted report and persisted per-host status |
 
@@ -39,8 +41,11 @@ owned by an app-level `Session` (not by a screen), so playback and the live even
 stream survive moving between destinations.
 
 - **Drawer** — a slide-over list with a host header (name, switcher, keyboard /
-  mic / search actions) and the destinations above. Selecting the current host
-  again is a no-op; deleting the active host returns the app to the picker.
+  mic / search actions) and the destinations above, Favorites among them.
+  Selecting the current host again is a no-op; deleting the active host returns
+  the app to the picker. **Each destination remembers the place you last reached
+  inside it** for the session, so leaving Addons for the Remote and coming back
+  restores that folder rather than resetting to the top.
 - **Mini-player** — pinned above every destination while a player is active, with
   a thumbnail, the title, and stop / play-pause / next. Tapping it opens the
   Now Playing overlay.
@@ -55,8 +60,18 @@ stream survive moving between destinations.
   item's artwork is the blurred background and the tiles turn translucent.
 - **Library** — Movies and TV Shows browse as a two-column poster grid; Artists
   and Albums, and a show's episodes, browse as lists.
-- **Not implemented** — Pvr, Files and Addons show a placeholder naming the
-  destination rather than a dead end.
+- **Addons** — the video add-ons installed on the host, as a poster grid. Tapping
+  one browses the content it exposes at `plugin://<addonid>/`, presented the same
+  way (add-on content is a grid, a filesystem folder stays a list). A long press
+  offers enabling/disabling the add-on and saving it as a favourite.
+- **Favorites** — the places you saved, as a poster grid with their artwork. A
+  favourite is added by long-pressing a folder inside a video add-on, and removed
+  by long-pressing its tile. The drawer no longer lists one row per favourite.
+- **Not on every screen** — the drawer control is on the destinations and on the
+  screens pushed inside them, so you can leave a folder for the Remote without
+  first going back to the top.
+- **Not implemented** — Pvr shows a placeholder naming the destination rather than
+  a dead end.
 
 ## Connection self-check
 
