@@ -221,6 +221,26 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The `o` overlay: resolution, video and audio codec, and whether the decoder
+    /// is hardware or software.
+    ///
+    /// Kodi only opens that dialog during fullscreen playback, so the button is
+    /// inert anywhere else rather than sending an action the box would ignore.
+    @MainActor
+    func showPlayerProcessInfo() async {
+        guard let action = Self.playerInfoAction(seeking: isSeeking) else { return }
+        await send("Input.ExecuteAction", ["action": action])
+    }
+
+    /// `ActionTranslator.cpp` maps **both** `codecinfo` and `playerprocessinfo` to
+    /// `ACTION_PLAYER_PROCESS_INFO`, and `system/keymaps/keyboard.xml` binds `o` to
+    /// `PlayerProcessInfo` — so either name shows the same overlay. Named once here
+    /// rather than spelled at the call site, so a typo cannot become an invisible
+    /// button that sends a dead action.
+    static func playerInfoAction(seeking: Bool) -> String? {
+        seeking ? "playerprocessinfo" : nil
+    }
+
     @MainActor
     func togglePlayPause() async {
         guard let playerid else { return }

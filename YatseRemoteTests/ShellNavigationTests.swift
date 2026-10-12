@@ -204,6 +204,13 @@ final class ShellNavigationTests: XCTestCase {
         assertSymbolsExist(LibrarySection.allCases.map(\.systemImage))
     }
 
+    /// The utility row is built inline rather than from an enum, so its symbols go
+    /// through `RemoteTileSymbol.all`. The row and the test read the same
+    /// constants, so a typo fails here instead of shipping an invisible button.
+    func testEveryRemoteTileSymbolExists() {
+        assertSymbolsExist(RemoteTileSymbol.all)
+    }
+
     /// The row and the drawer must agree: they drifted once and only the row
     /// broke, so the mapping lives in one place now.
     func testShortcutsAndDrawerAgreeOnIconsAndTitles() {
@@ -334,6 +341,13 @@ final class ShellNavigationTests: XCTestCase {
         for action in ["up", "down", "select"] {
             XCTAssertEqual(AppModel.actionForPlayback(action, seeking: true), action)
         }
+    }
+
+    /// The `o` overlay only exists during fullscreen playback, so the button asks
+    /// for it then and is inert otherwise (Kodi's rule, not a preference).
+    func testPlayerInfoIsOnlyAskedForDuringFullscreenPlayback() {
+        XCTAssertEqual(AppModel.playerInfoAction(seeking: true), "playerprocessinfo")
+        XCTAssertNil(AppModel.playerInfoAction(seeking: false))
     }
 
     // MARK: Scroll memory
