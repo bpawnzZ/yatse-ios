@@ -267,13 +267,6 @@ final class KodiModelTests: XCTestCase {
         XCTAssertEqual(LibrarySection.tvshows.items(from: payload).count, 0)
     }
 
-    func testSectionLayoutMapsPosterMediaToGrid() {
-        XCTAssertEqual(LibrarySection.movies.layout, .grid)
-        XCTAssertEqual(LibrarySection.tvshows.layout, .grid)
-        XCTAssertEqual(LibrarySection.artists.layout, .list)
-        XCTAssertEqual(LibrarySection.albums.layout, .list)
-    }
-
     func testChildrenRequestsCarryTheirParentID() {
         XCTAssertEqual(ChildrenRequest.episodes(tvshowID: 12).params["tvshowid"] as? Int, 12)
         XCTAssertEqual(ChildrenRequest.albumsOfArtist(artistID: 7).params["artistid"] as? Int, 7)

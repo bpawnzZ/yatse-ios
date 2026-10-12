@@ -181,3 +181,34 @@ struct MediaRow: View {
         }
     }
 }
+
+/// The list-mode row for a saved favourite: the shape `MediaRow` gives a library
+/// item, built from what a favourite records rather than from a `MediaItem`.
+struct FavoriteRow: View {
+    let favorite: Favorite
+    let artURL: URL?
+    let username: String
+    let password: String
+    /// What the row's second line says. Defaults to the kind of place the
+    /// favourite names; a caller with better information — an add-on's version
+    /// and state, say — passes it instead.
+    var detail: String? = nil
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ArtworkImage(url: artURL, username: username, password: password)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(favorite.title)
+                    .font(.body)
+                    .lineLimit(2)
+                Text(detail ?? FavoritesScreen.detailLine(for: favorite.target))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+}

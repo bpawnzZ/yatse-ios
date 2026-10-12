@@ -168,23 +168,6 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertNil(LibrarySection.movies.childRequest(for: film))
     }
 
-    // MARK: Directory layout
-
-    /// Add-on content browses as a grid and a filesystem folder as a list, decided
-    /// by the path so no caller has to remember which it is.
-    func testPluginContentBrowsesAsAGrid() {
-        XCTAssertEqual(DirectoryView.layout(forPath: "plugin://plugin.video.youtube/"), .grid)
-        XCTAssertEqual(
-            DirectoryView.layout(forPath: "plugin://plugin.video.youtube/special/my_subscriptions"),
-            .grid
-        )
-    }
-
-    func testFilesystemFoldersStayAList() {
-        XCTAssertEqual(DirectoryView.layout(forPath: "smb://nas/films/"), .list)
-        XCTAssertEqual(DirectoryView.layout(forPath: "/storage/movies"), .list)
-    }
-
     // MARK: Icons
 
     /// A mistyped SF Symbol name draws nothing while leaving the button
@@ -202,6 +185,12 @@ final class ShellNavigationTests: XCTestCase {
 
     func testEveryLibrarySectionSymbolExists() {
         assertSymbolsExist(LibrarySection.allCases.map(\.systemImage))
+    }
+
+    /// The layout control draws one of these, so a mode naming a symbol that does
+    /// not exist would show an invisible toolbar button.
+    func testEveryViewModeSymbolExists() {
+        assertSymbolsExist(ViewMode.allCases.map(\.systemImage))
     }
 
     /// The utility row is built inline rather than from an enum, so its symbols go

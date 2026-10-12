@@ -18,6 +18,8 @@ struct AddonsScreen: View {
     let onOpenDrawer: () -> Void
 
     @Environment(\.scrollMemory) private var scrollMemory
+    /// The layout every browse screen shares — see `ViewMode`.
+    @AppStorage(ViewMode.storageKey) private var mode = ViewMode.fallback
 
     @State private var addons: [Addon] = []
     @State private var isLoading = true
@@ -35,22 +37,9 @@ struct AddonsScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12),
-                ],
-                spacing: 16
-            ) {
-                ForEach(videoAddons) { addon in
-                    cell(addon)
-                }
-            }
-            .scrollTargetLayout()
-            .padding()
+        Group {
+            if mode.isGrid { grid } else { list }
         }
-        .rememberedScrollPosition(ScrollPlace.addons, top: $topItem)
         .overlay { emptyState }
         .navigationTitle("Addons")
         .navigationBarTitleDisplayMode(.inline)
@@ -59,7 +48,8 @@ struct AddonsScreen: View {
                 Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
                     .accessibilityLabel("Open menu")
             }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                ViewModeMenu()
                 Button {
                     Task { await load() }
                 } label: {
@@ -73,6 +63,29 @@ struct AddonsScreen: View {
             await load()
             topItem = scrollMemory.top(for: ScrollPlace.addons)
         }
+    }
+
+    private var grid: some View {
+        ScrollView {
+            LazyVGrid(columns: mode.gridColumns, spacing: 16) {
+                ForEach(videoAddons) { addon in
+                    cell(addon)
+                }
+            }
+            .scrollTargetLayout()
+            .padding()
+        }
+        .rememberedScrollPosition(ScrollPlace.addons, top: $topItem)
+    }
+
+    private var list: some View {
+        List {
+            ForEach(videoAddons) { addon in
+                cell(addon)
+            }
+        }
+        .listStyle(.plain)
+        .rememberedScrollPosition(ScrollPlace.addons, top: $topItem)
     }
 
     @ViewBuilder
@@ -92,7 +105,15 @@ struct AddonsScreen: View {
 
     private func cell(_ addon: Addon) -> some View {
         NavigationLink(value: Favorite(addon: addon)) {
-            tile(addon)
+            if mode.isGrid {
+                tile(addon)
+            } else {
+                FavoriteRow(favorite: Favorite(addon: addon),
+                            artURL: Artwork.url(addon.thumbnail, host: model.host),
+                            username: model.host.username,
+                            password: model.password,
+                            detail: detail(for: addon))
+            }
         }
         .contextMenu {
             FavoriteMenuItem(favorite: Favorite(addon: addon))
@@ -105,7 +126,8 @@ struct AddonsScreen: View {
                    title: addon.displayName,
                    detail: detail(for: addon),
                    username: model.host.username,
-                   password: model.password)
+                   password: model.password,
+                   mode: mode)
     }
 
     /// Version and state, in the single line a tile has room for.

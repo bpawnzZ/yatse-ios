@@ -120,12 +120,10 @@ struct ShellView: View {
         case .episodes(let tvshowID):
             ChildrenView(model: model,
                          request: .episodes(tvshowID: tvshowID),
-                         heading: favorite.title,
                          onOpenDrawer: openDrawer)
         case .albumsOfArtist(let artistID):
             ChildrenView(model: model,
                          request: .albumsOfArtist(artistID: artistID),
-                         heading: favorite.title,
                          onOpenDrawer: openDrawer)
         case .directory(let directory):
             DirectoryView(model: model, path: directory, title: favorite.title,
