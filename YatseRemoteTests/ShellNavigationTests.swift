@@ -354,11 +354,35 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertEqual(AppModel.actionForPlayback("select", seeking: false), "select")
     }
 
-    /// The `o` overlay only exists during fullscreen playback, so the button asks
-    /// for it then and is inert otherwise (Kodi's rule, not a preference).
-    func testPlayerInfoIsOnlyAskedForDuringFullscreenPlayback() {
-        XCTAssertEqual(AppModel.playerInfoAction(seeking: true), "playerprocessinfo")
-        XCTAssertNil(AppModel.playerInfoAction(seeking: false))
+    /// The `o` overlay can be asked for whenever a player is running — Kodi toggles
+    /// it (the dialog closes itself on this action), so the app must not gate it on
+    /// which window the box has focused: opening the overlay changes that window, and
+    /// gating on it was why the second press did nothing.
+    func testPlayerInfoIsAskedForWheneverSomethingIsPlaying() {
+        XCTAssertEqual(AppModel.playerInfoAction(playing: true), "playerprocessinfo")
+        XCTAssertNil(AppModel.playerInfoAction(playing: false))
+    }
+
+    // MARK: Tray pulls
+
+    /// Up on the playback bar opens the full player, down on that player closes it.
+    /// Both directions share one rule, so they cannot disagree about the threshold.
+    func testTrayPullsResolveByDirection() {
+        let far = TraySwipe.minimumTravel + 20
+        XCTAssertTrue(TraySwipe.isPull(CGSize(width: 4, height: -far), direction: .up))
+        XCTAssertTrue(TraySwipe.isPull(CGSize(width: 4, height: far), direction: .down))
+    }
+
+    /// A short drag is a tap, a drag the other way is not a pull, and a sideways
+    /// drag is never either: the bar is covered in transport buttons a thumb slides
+    /// across, and none of those should open a full-screen surface.
+    func testTrayPullsIgnoreShortSidewaysAndReversedDrags() {
+        let far = TraySwipe.minimumTravel + 20
+        XCTAssertFalse(TraySwipe.isPull(CGSize(width: 4, height: -10), direction: .up))
+        XCTAssertFalse(TraySwipe.isPull(CGSize(width: 4, height: -far), direction: .down))
+        XCTAssertFalse(TraySwipe.isPull(CGSize(width: 4, height: far), direction: .up))
+        XCTAssertFalse(TraySwipe.isPull(CGSize(width: far * 2, height: -far), direction: .up))
+        XCTAssertFalse(TraySwipe.isPull(CGSize(width: -far * 2, height: far), direction: .down))
     }
 
     // MARK: Scroll memory

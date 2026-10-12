@@ -19,10 +19,15 @@ struct NowPlayingView: View {
 
     var body: some View {
         ZStack {
+            // Pull down over the artwork to close, the way a sheet dismisses. It sits
+            // on the backdrop rather than over the whole screen so the seek slider and
+            // the transport buttons keep the gestures they need.
             backdrop
+                .gesture(dismissPull)
 
             VStack(spacing: 18) {
                 header
+                    .gesture(dismissPull)
                 Spacer(minLength: 0)
                 seekSection
                 transportSection
@@ -37,6 +42,16 @@ struct NowPlayingView: View {
         .onChange(of: model.positionSeconds) { _, value in
             if !isSeeking { seekTarget = value }
         }
+    }
+
+    /// Pull-down-to-close, shared by the artwork behind and the header bar — the two
+    /// places a thumb lands when reaching to dismiss. A sideways drag never counts,
+    /// so it cannot fire while the hand moves across the screen.
+    private var dismissPull: some Gesture {
+        DragGesture(minimumDistance: TraySwipe.minimumTravel)
+            .onEnded { value in
+                if TraySwipe.isPull(value.translation, direction: .down) { dismiss() }
+            }
     }
 
     // MARK: Backdrop
