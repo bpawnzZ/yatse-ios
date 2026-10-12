@@ -17,6 +17,10 @@ jobs:
   build:
     runs-on: macos-26
     timeout-minutes: 30
+    # Publishing a release writes to the repo; scope that to this job rather than
+    # the whole workflow.
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v7
@@ -101,3 +105,24 @@ jobs:
             ${{ env.APP_NAME }}-unsigned.ipa.sha256
           if-no-files-found: error
           retention-days: 30
+
+      # Artifacts expire and are buried behind a login; a build people actually
+      # install belongs somewhere they can find it. Main only — a PR build must
+      # not publish a release, and the tag deliberately does not match the `v*`
+      # trigger above, so creating it cannot start another run.
+      - name: Publish release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="build-${{ github.run_number }}"
+          NOTES=$(printf 'Unsigned IPA built from `main` at `%s`.\n\nThis build carries no signature and is re-signed on device (SideStore, AltStore or Sideloadly) — that is why no Apple developer account sits behind this repo. It does not install as-is.\n\nAssets: `YatseRemote-unsigned.ipa` and its `sha256`.\n' "$GITHUB_SHA")
+
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "Build ${{ github.run_number }} (${GITHUB_SHA:0:7})" \
+            --notes "$NOTES" \
+            "$APP_NAME-unsigned.ipa" "$APP_NAME-unsigned.ipa.sha256"
+
+          echo "published $TAG"

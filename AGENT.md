@@ -69,10 +69,19 @@ git checkout main && git pull --ff-only
 
 # 7. When the main build is green, send that build's IPA
 ~/.local/bin/send-yatse-ipa <main-build-run-id> "main <sha> · PR #N — what changed"
+#    The same build also publishes a release (tag build-<run_number>) carrying the
+#    IPA and its sha256, so a build someone wants later does not mean digging
+#    through expiring Actions artifacts.
 ```
 
 Rules that go with it:
 
+- **Only a `main` push publishes a release.** The step is guarded on
+  `github.event_name == 'push' && github.ref == 'refs/heads/main'`, so a PR build
+  ships an artifact and nothing else. The release tag is `build-<run_number>` and
+  deliberately does not match the `v*` tag trigger, so publishing cannot start
+  another run. Creating a release by hand is therefore never necessary — merge to
+  `main` and it appears.
 - **`tests.yml` never runs on a `main` push.** Tests only run for a PR or a manual
   dispatch, so a green `main` build alone does *not* mean tests passed for that
   commit — check the PR's test run.
