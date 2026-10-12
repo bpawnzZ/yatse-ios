@@ -21,6 +21,20 @@ AGENT.md
 docs/AGENT-PROMPT.md
 openspec/
 
+# Build output from the local release helper (scripts/), plus anything it drops
+dist/
+
+# Agent scratch — a tool's local state or instruction files, not this project.
+# CLAUDE.md and AGENTS.md are the ones an agent writes without being asked; the
+# rest are tool state that arrives with one.
+CLAUDE.md
+AGENTS.md
+.claude/
+.codex/
+.opencode/
+.cursor/
+.aider*
+
 # Python bytecode (scripts/check-host.py)
 __pycache__/
 *.pyc
