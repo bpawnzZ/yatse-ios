@@ -234,21 +234,29 @@ final class AppModel: ObservableObject {
     /// The `o` overlay: resolution, video and audio codec, and whether the decoder
     /// is hardware or software.
     ///
-    /// Kodi only opens that dialog during fullscreen playback, so the button is
-    /// inert anywhere else rather than sending an action the box would ignore.
+    /// Asked for whenever a player is active, and no more tightly than that. Kodi
+    /// decides whether the overlay opens or closes: the action is a toggle handled by
+    /// the dialog itself (`CGUIDialogPlayerProcessInfo::OnAction` → `Close()` when it
+    /// receives `ACTION_PLAYER_PROCESS_INFO`), and the press is routed to whichever
+    /// window has focus — the overlay, once it is up.
+    ///
+    /// The earlier gate ("fullscreen video window 12005") was the bug behind "pressing
+    /// it again does nothing": opening the overlay moves the current window off 12005,
+    /// so the second press never left the phone and the overlay had to be closed with
+    /// Back. Do not narrow this again — a remote cannot know which window the box
+    /// considers focused, and does not need to.
     @MainActor
     func showPlayerProcessInfo() async {
-        guard let action = Self.playerInfoAction(seeking: isSeeking) else { return }
+        guard let action = Self.playerInfoAction(playing: playerid != nil) else { return }
         await send("Input.ExecuteAction", ["action": action])
     }
 
     /// `ActionTranslator.cpp` maps **both** `codecinfo` and `playerprocessinfo` to
-    /// `ACTION_PLAYER_PROCESS_INFO`, and `system/keymaps/keyboard.xml` binds `o` to
-    /// `PlayerProcessInfo` — so either name shows the same overlay. Named once here
-    /// rather than spelled at the call site, so a typo cannot become an invisible
-    /// button that sends a dead action.
-    static func playerInfoAction(seeking: Bool) -> String? {
-        seeking ? "playerprocessinfo" : nil
+    /// `ACTION_PLAYER_PROCESS_INFO` — aliases for one overlay, which only exists while
+    /// a player is running. Named once here rather than spelled at the call site, so a
+    /// typo cannot become an invisible button sending a dead action.
+    static func playerInfoAction(playing: Bool) -> String? {
+        playing ? "playerprocessinfo" : nil
     }
 
     @MainActor

@@ -1,5 +1,26 @@
 import SwiftUI
 
+/// The pull gesture on the playback tray: up on the bar opens the full player,
+/// down on that player closes it again. Pure so the threshold and the axis rule
+/// are testable without a running host.
+enum TraySwipe {
+    /// Travel before a drag counts as a pull rather than a tap or a wobble.
+    static let minimumTravel: CGFloat = 48
+
+    enum Direction { case up, down }
+
+    /// True when the drag is mostly vertical, long enough, and heading `direction`.
+    ///
+    /// The axis rule is the point: without it a sideways move across the bar — a
+    /// thumb sliding toward the transport buttons — would open a full-screen
+    /// surface, and the bar carries buttons that are dragged over all the time.
+    static func isPull(_ translation: CGSize, direction: Direction) -> Bool {
+        let dy = translation.height
+        guard abs(dy) >= minimumTravel, abs(dy) > abs(translation.width) else { return false }
+        return direction == .up ? dy < 0 : dy > 0
+    }
+}
+
 /// The playback bar pinned above every destination while a player is active, so
 /// playback is always visible and one tap from the Remote.
 struct MiniPlayer: View {
@@ -58,6 +79,15 @@ struct MiniPlayer: View {
                 .fill(theme.divider)
                 .frame(height: 1.5)
         }
+        // Pull the bar up to open the full player. `minimumDistance` is the same
+        // threshold the rule uses, so a tap still reaches stop/pause/next: a tap
+        // never travels far enough to be recognised as a drag at all.
+        .gesture(
+            DragGesture(minimumDistance: TraySwipe.minimumTravel)
+                .onEnded { value in
+                    if TraySwipe.isPull(value.translation, direction: .up) { onOpen() }
+                }
+        )
     }
 
     private var title: String {
