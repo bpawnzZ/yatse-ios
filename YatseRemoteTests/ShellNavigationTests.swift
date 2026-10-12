@@ -247,6 +247,83 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertNil(TouchpadGestureResolver.key(forTranslation: CGSize(width: -10, height: 10)))
     }
 
+    /// The surface sends `action`, not `key`: a tap and a swipe are one gesture,
+    /// so every finished touch has to resolve to something. A nil-driven surface
+    /// is one where the swipe lands and nothing happens.
+    func testTouchpadTapResolvesToSelect() {
+        XCTAssertEqual(TouchpadGestureResolver.action(forTranslation: .zero), .select)
+        XCTAssertEqual(TouchpadGestureResolver.action(forTranslation: CGSize(width: 5, height: -5)), .select)
+    }
+
+    func testTouchpadSwipeResolvesToItsDirection() {
+        XCTAssertEqual(TouchpadGestureResolver.action(forTranslation: CGSize(width: 120, height: 4)), .right)
+        XCTAssertEqual(TouchpadGestureResolver.action(forTranslation: CGSize(width: -120, height: 4)), .left)
+        XCTAssertEqual(TouchpadGestureResolver.action(forTranslation: CGSize(width: 4, height: -120)), .up)
+        XCTAssertEqual(TouchpadGestureResolver.action(forTranslation: CGSize(width: 4, height: 120)), .down)
+    }
+
+    // MARK: Scroll memory
+
+    func testNothingIsRememberedForAPlaceNeverScrolled() {
+        XCTAssertNil(ScrollMemory().top(for: ScrollPlace.addons))
+    }
+
+    func testAPlaceScrolledDownIsRemembered() {
+        let memory = ScrollMemory()
+        memory.record(140, for: ScrollPlace.library(.movies))
+        XCTAssertEqual(memory.top(for: ScrollPlace.library(.movies)), 140)
+    }
+
+    /// Item 0 *is* the top of the list, which is the same as having no memory: a
+    /// list left at its top has to come back at its top, not pinned to item 0.
+    func testLeavingAListAtItsTopForgetsThePlace() {
+        let memory = ScrollMemory()
+        let movies = ScrollPlace.library(.movies)
+        memory.record(140, for: movies)
+        memory.record(0, for: movies)
+        XCTAssertNil(memory.top(for: movies))
+
+        memory.record(140, for: movies)
+        memory.record(nil, for: movies)
+        XCTAssertNil(memory.top(for: movies))
+    }
+
+    func testEachPlaceKeepsItsOwnScroll() {
+        let memory = ScrollMemory()
+        let youtube = ScrollPlace.directory("plugin://plugin.video.youtube/")
+        memory.record(90, for: youtube)
+
+        XCTAssertEqual(memory.top(for: youtube), 90)
+        XCTAssertNil(memory.top(for: ScrollPlace.directory("/storage/films/")),
+                     "a second folder was given the first folder's scroll")
+        XCTAssertNil(memory.top(for: ScrollPlace.library(.movies)))
+    }
+
+    /// Two places must never share a key. A collision sends one screen to another
+    /// screen's position, and nothing else in the app can see it happen.
+    func testEveryPlaceHasItsOwnKey() {
+        let keys = [
+            ScrollPlace.library(.movies),
+            ScrollPlace.library(.tvshows),
+            ScrollPlace.library(.artists),
+            ScrollPlace.directory("/storage/films/"),
+            ScrollPlace.directory("plugin://plugin.video.youtube/"),
+            ScrollPlace.children(.episodes(tvshowID: 12)),
+            ScrollPlace.children(.albumsOfArtist(artistID: 7)),
+            ScrollPlace.addons,
+            ScrollPlace.favorites,
+        ]
+        XCTAssertEqual(Set(keys).count, keys.count, "two places share a scroll key: \(keys)")
+    }
+
+    /// A favourite reopens the screen it was saved from, so it has to derive the
+    /// same key — otherwise its place is restored but its scroll is not.
+    func testAFavouriteDerivesTheSameKeyAsThePlaceItWasSavedFrom() {
+        let path = "plugin://plugin.video.youtube/special/my_subscriptions"
+        let favourite = Favorite(title: "My Subscriptions", target: .directory(path: path))
+        XCTAssertEqual(ScrollPlace.directory(path), favourite.target.id)
+    }
+
     // MARK: Mini-player visibility
 
     func testMiniPlayerHiddenWithNoPlayer() {

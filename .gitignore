@@ -13,6 +13,14 @@ xcuserdata/
 # (the same skills are already installed globally in ~/.hermes/skills)
 .hermes/
 
+# Local handoff notes and specs — deliberately not published. AGENT.md carries
+# this box's paths and the development host, and openspec/ is working material,
+# so both live on disk and out of the repo. (They remain in the history of the
+# commits made before this was noticed.)
+AGENT.md
+docs/AGENT-PROMPT.md
+openspec/
+
 # Python bytecode (scripts/check-host.py)
 __pycache__/
 *.pyc

@@ -20,6 +20,18 @@ enum TouchpadGestureResolver {
         if abs(dx) >= abs(dy) { return dx >= 0 ? .right : .left }
         return dy >= 0 ? .down : .up
     }
+
+    /// What one finished touch means: a swipe key, or `select` when the finger
+    /// barely moved.
+    ///
+    /// A tap and a swipe are the same recogniser reporting two different
+    /// translations, rather than a drag and a tap competing over one surface —
+    /// where the drag only exists once the finger has already travelled
+    /// `threshold` points, leaving the touch to be resolved as a tap on release.
+    /// `TouchpadSurface` sends whatever this returns.
+    static func action(forTranslation translation: CGSize, threshold: CGFloat = 24) -> TouchKey {
+        key(forTranslation: translation, threshold: threshold) ?? .select
+    }
 }
 
 /// The touch surface shown in place of the directional pad in touchpad mode.
@@ -40,16 +52,17 @@ struct TouchpadSurface: View {
                         .foregroundStyle(.secondary)
                 }
             )
-            .contentShape(RoundedRectangle(cornerRadius: theme.tileCornerRadius))
-            .highPriorityGesture(
-                DragGesture(minimumDistance: TouchpadGestureResolver.threshold)
+            .contentShape(RoundedRectangle(cornerRadius: theme.tileCornerRadius, style: .continuous))
+            // One gesture, not a drag plus a tap. `minimumDistance: 0` claims the
+            // touch as it lands, which is right for a surface with nothing
+            // underneath to scroll, and the total translation at release decides
+            // swipe or tap. There is no second recogniser to lose the touch to.
+            .gesture(
+                DragGesture(minimumDistance: 0)
                     .onEnded { value in
-                        guard let key = TouchpadGestureResolver.key(forTranslation: value.translation) else { return }
+                        let key = TouchpadGestureResolver.action(forTranslation: value.translation)
                         Task { await model.key(key.rawValue) }
                     }
             )
-            .onTapGesture {
-                Task { await model.key(TouchKey.select.rawValue) }
-            }
     }
 }
