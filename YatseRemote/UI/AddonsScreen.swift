@@ -83,10 +83,7 @@ struct AddonsScreen: View {
     }
 
     private func cell(_ addon: Addon) -> some View {
-        NavigationLink {
-            DirectoryView(model: model, path: addon.browsePath, title: addon.displayName,
-                          onOpenDrawer: onOpenDrawer)
-        } label: {
+        NavigationLink(value: Favorite(addon: addon)) {
             tile(addon)
         }
         .contextMenu {

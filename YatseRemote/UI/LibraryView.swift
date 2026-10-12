@@ -109,10 +109,11 @@ struct LibraryView: View {
     @ViewBuilder
     private func listRow(for item: MediaItem) -> some View {
         if let child = section.childRequest(for: item) {
-            NavigationLink {
-                ChildrenView(model: model, request: child, heading: item.heading,
-                             onOpenDrawer: onOpenDrawer)
-            } label: {
+            // Value-based, not the destination-closure form: only values land in
+            // `ShellView.pushed`, and a destination change rebuilds the stack
+            // (`.id(destination)`) so a closure-built screen is discarded without
+            // the shell ever knowing it existed.
+            NavigationLink(value: Favorite(title: item.heading, target: child.favoriteTarget)) {
                 MediaRow(item: item, username: model.host.username, password: model.password, showsChevron: true)
             }
         } else {
@@ -128,10 +129,7 @@ struct LibraryView: View {
     @ViewBuilder
     private func gridCell(for item: MediaItem) -> some View {
         if let child = section.childRequest(for: item) {
-            NavigationLink {
-                ChildrenView(model: model, request: child, heading: item.heading,
-                             onOpenDrawer: onOpenDrawer)
-            } label: {
+            NavigationLink(value: Favorite(title: item.heading, target: child.favoriteTarget)) {
                 PosterTile(item: item, username: model.host.username, password: model.password)
             }
         } else {
@@ -424,10 +422,7 @@ struct FilesScreen: View {
     var body: some View {
         List {
             ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
-                NavigationLink {
-                    DirectoryView(model: model, path: source.file, title: source.heading,
-                                  onOpenDrawer: onOpenDrawer)
-                } label: {
+                NavigationLink(value: Favorite(title: source.heading, target: .directory(path: source.file))) {
                     MediaRow(item: source, username: model.host.username, password: model.password, showsChevron: true)
                 }
             }
@@ -529,10 +524,7 @@ struct DirectoryView: View {
         List {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 if item.isDirectory {
-                    NavigationLink {
-                        DirectoryView(model: model, path: item.file, title: item.heading,
-                                      onOpenDrawer: onOpenDrawer)
-                    } label: {
+                    NavigationLink(value: Favorite(directoryEntry: item)) {
                         MediaRow(item: item, username: model.host.username, password: model.password, showsChevron: true)
                     }
                     .contextMenu { FavoriteMenuItem(favorite: Favorite(directoryEntry: item)) }
@@ -562,10 +554,7 @@ struct DirectoryView: View {
             ) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     if item.isDirectory {
-                        NavigationLink {
-                            DirectoryView(model: model, path: item.file, title: item.heading,
-                                          onOpenDrawer: onOpenDrawer)
-                        } label: {
+                        NavigationLink(value: Favorite(directoryEntry: item)) {
                             tile(item)
                         }
                         .contextMenu { FavoriteMenuItem(favorite: Favorite(directoryEntry: item)) }

@@ -108,6 +108,66 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertEqual(memory.path(for: .favorites), [favourite])
     }
 
+    /// The point of the memory is the *deepest* screen, not the first one: coming
+    /// back must land on the screen that was left, several pushes down.
+    func testADeepPathIsRestoredWholeAndInOrder() {
+        var memory = NavigationMemory()
+        let addon = place("YouTube", "plugin://plugin.video.youtube/")
+        let subscriptions = place("Subscriptions", "plugin://plugin.video.youtube/special/subs")
+        let playlist = place("Watch later", "plugin://plugin.video.youtube/special/subs/later")
+
+        memory.record([addon, subscriptions, playlist], for: .addons)
+
+        XCTAssertEqual(memory.path(for: .addons), [addon, subscriptions, playlist])
+        XCTAssertEqual(memory.path(for: .addons).last?.title, "Watch later")
+    }
+
+    /// Every destination keeps its own place independently — including the video
+    /// sections and Favorites, which reach the stack through a different control
+    /// than the add-ons browser does.
+    func testEachDestinationKeepsItsOwnPlace() {
+        var memory = NavigationMemory()
+        let show = Favorite(title: "The Wire", target: .episodes(tvshowID: 12))
+        let artist = Favorite(title: "Portishead", target: .albumsOfArtist(artistID: 7))
+        let favourite = place("My Subscriptions", "plugin://plugin.video.youtube/special/x")
+
+        memory.record([show], for: .tvShows)
+        memory.record([artist], for: .music)
+        memory.record([favourite], for: .favorites)
+
+        XCTAssertEqual(memory.path(for: .tvShows), [show])
+        XCTAssertEqual(memory.path(for: .music), [artist])
+        XCTAssertEqual(memory.path(for: .favorites), [favourite])
+        XCTAssertTrue(memory.path(for: .movies).isEmpty)
+    }
+
+    /// The two halves of a library drill-down have to agree. The row asks for a
+    /// `ChildrenRequest` to load the screen, and the value it pushes — the only
+    /// thing the memory ever sees — is built from that request's target. A
+    /// mismatch would come back on a different screen than the row that was tapped.
+    func testALibraryRowPushesThePlaceItsChildRequestNames() throws {
+        let show = try JSONDecoder().decode(
+            MediaItem.self,
+            from: Data(#"{"label":"The Wire","tvshowid":12}"#.utf8)
+        )
+
+        let request = try XCTUnwrap(LibrarySection.tvshows.childRequest(for: show))
+        let pushed = Favorite(title: show.heading, target: request.favoriteTarget)
+
+        XCTAssertEqual(pushed.target, .episodes(tvshowID: 12))
+        XCTAssertEqual(pushed.title, "The Wire")
+    }
+
+    /// Rows that play instead of drilling down push nothing, so nothing is added
+    /// to the place and the memory cannot invent a screen for them.
+    func testRowsThatPlayDoNotPush() throws {
+        let film = try JSONDecoder().decode(
+            MediaItem.self,
+            from: Data(#"{"label":"Heat","movieid":3}"#.utf8)
+        )
+        XCTAssertNil(LibrarySection.movies.childRequest(for: film))
+    }
+
     // MARK: Directory layout
 
     /// Add-on content browses as a grid and a filesystem folder as a list, decided
