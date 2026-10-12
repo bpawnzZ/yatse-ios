@@ -10,6 +10,8 @@ struct LibraryView: View {
     var onOpenDrawer: (() -> Void)? = nil
 
     @Environment(\.scrollMemory) private var scrollMemory
+    /// The layout every browse screen shares — see `ViewMode`.
+    @AppStorage(ViewMode.storageKey) private var mode = ViewMode.fallback
 
     @State private var items: [MediaItem] = []
     @State private var total = 0
@@ -25,10 +27,7 @@ struct LibraryView: View {
 
     var body: some View {
         Group {
-            switch section.layout {
-            case .grid: grid
-            case .list: list
-            }
+            if mode.isGrid { grid } else { list }
         }
         .overlay { emptyState }
         .navigationTitle(section.title)
@@ -41,7 +40,7 @@ struct LibraryView: View {
                 }
             }
             ToolbarItemGroup(placement: .primaryAction) {
-                FavoriteButton(title: section.title, target: .section(section.rawValue))
+                ViewModeMenu()
                 Button {
                     Task { await reload() }
                 } label: {
@@ -77,20 +76,14 @@ struct LibraryView: View {
 
     private var grid: some View {
         ScrollView {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12),
-                ],
-                spacing: 16
-            ) {
+            LazyVGrid(columns: mode.gridColumns, spacing: 16) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     gridCell(for: item)
                         .onAppear { loadMoreIfNeeded(index) }
                 }
 
                 if isLoading && !items.isEmpty {
-                    ProgressView().gridCellColumns(2)
+                    ProgressView().gridCellColumns(mode.columnCount)
                 }
             }
             .scrollTargetLayout()
@@ -123,9 +116,10 @@ struct LibraryView: View {
             // `ShellView.pushed`, and a destination change rebuilds the stack
             // (`.id(destination)`) so a closure-built screen is discarded without
             // the shell ever knowing it existed.
-            NavigationLink(value: Favorite(title: item.heading, target: child.favoriteTarget)) {
+            NavigationLink(value: favorite(for: item, target: child.favoriteTarget)) {
                 MediaRow(item: item, username: model.host.username, password: model.password, showsChevron: true)
             }
+            .contextMenu { FavoriteMenuItem(favorite: favorite(for: item, target: child.favoriteTarget)) }
         } else {
             Button {
                 Task { await play(item) }
@@ -139,17 +133,28 @@ struct LibraryView: View {
     @ViewBuilder
     private func gridCell(for item: MediaItem) -> some View {
         if let child = section.childRequest(for: item) {
-            NavigationLink(value: Favorite(title: item.heading, target: child.favoriteTarget)) {
-                PosterTile(item: item, username: model.host.username, password: model.password)
+            NavigationLink(value: favorite(for: item, target: child.favoriteTarget)) {
+                PosterTile(item: item, username: model.host.username, password: model.password, mode: mode)
             }
+            .contextMenu { FavoriteMenuItem(favorite: favorite(for: item, target: child.favoriteTarget)) }
         } else {
             Button {
                 Task { await play(item) }
             } label: {
-                PosterTile(item: item, username: model.host.username, password: model.password)
+                PosterTile(item: item, username: model.host.username, password: model.password, mode: mode)
             }
             .buttonStyle(.plain)
         }
+    }
+
+    /// The favourite a tile or row stands for. Saving from here is the long
+    /// press's job now the toolbar star is gone, and the artwork travels with it
+    /// so the Favorites grid shows a poster rather than a placeholder.
+    private func favorite(for item: MediaItem, target: FavoriteTarget) -> Favorite {
+        Favorite(title: item.heading,
+                 target: target,
+                 art: item.art,
+                 thumbnail: item.thumbnail)
     }
 
     private func loadMoreIfNeeded(_ index: Int) {
@@ -202,31 +207,6 @@ struct LibraryView: View {
     }
 }
 
-/// A toolbar star that saves the place you are looking at. Filled means it is
-/// already saved. Shared by the library, the drill-downs and the directory
-/// browser, so "favourite" means one thing in the app.
-struct FavoriteButton: View {
-    let title: String
-    let target: FavoriteTarget
-
-    @EnvironmentObject private var favorites: FavoriteStore
-
-    var body: some View {
-        let saved = favorites.contains(target)
-        Button {
-            let favorite = Favorite(title: title, target: target)
-            if saved {
-                favorites.remove(favorite)
-            } else {
-                favorites.toggle(favorite)
-            }
-        } label: {
-            Image(systemName: saved ? "star.fill" : "star")
-        }
-        .accessibilityLabel(saved ? "Remove favorite" : "Add favorite")
-    }
-}
-
 /// One grid tile: poster artwork with the title and detail line beneath.
 ///
 /// Parameterised rather than `MediaItem`-typed so the add-on, favourite and
@@ -239,34 +219,40 @@ struct PosterTile: View {
     let detail: String
     let username: String
     let password: String
+    /// The tile is sized by the layout it is rendered in, so it has to know it —
+    /// and the parameter deliberately has no default, because a call site that
+    /// forgets it would silently render full-size tiles in a dense grid.
+    let mode: ViewMode
 
-    init(url: URL?, title: String, detail: String, username: String, password: String) {
+    init(url: URL?, title: String, detail: String, username: String, password: String, mode: ViewMode) {
         self.url = url
         self.title = title
         self.detail = detail
         self.username = username
         self.password = password
+        self.mode = mode
     }
 
     /// The library grid's tile: artwork and text come from the item.
-    init(item: MediaItem, username: String, password: String) {
+    init(item: MediaItem, username: String, password: String, mode: ViewMode) {
         self.init(url: Artwork.poster(for: item.art, thumbnail: item.thumbnail),
                   title: item.heading,
                   detail: item.detailLine,
                   username: username,
-                  password: password)
+                  password: password,
+                  mode: mode)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             PosterImage(url: url, username: username, password: password)
             Text(title)
-                .font(.subheadline)
+                .font(mode.usesSmallTileText ? .caption : .subheadline)
                 .lineLimit(2)
                 .foregroundStyle(.primary)
-            if !detail.isEmpty {
+            if !detail.isEmpty && mode.showsTileDetail {
                 Text(detail)
-                    .font(.caption)
+                    .font(mode.usesSmallTileText ? .caption2 : .caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -308,39 +294,24 @@ struct FavoritesScreen: View {
 
     @EnvironmentObject private var favorites: FavoriteStore
     @Environment(\.scrollMemory) private var scrollMemory
+    /// The layout every browse screen shares — see `ViewMode`.
+    @AppStorage(ViewMode.storageKey) private var mode = ViewMode.fallback
     @State private var topItem: Int?
 
     var body: some View {
         Group {
             if favorites.items.isEmpty {
-                Text("Nothing saved yet. Long-press a folder inside a video add-on to save it here.")
+                // The only place that teaches the gesture, now the toolbar star is
+                // gone: saving a place is a long press on it.
+                Text("Nothing saved yet. Long-press a folder, a show or an artist to save it here.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding()
+            } else if mode.isGrid {
+                grid
             } else {
-                ScrollView {
-                    LazyVGrid(
-                        columns: [
-                            GridItem(.flexible(), spacing: 12),
-                            GridItem(.flexible(), spacing: 12),
-                        ],
-                        spacing: 16
-                    ) {
-                        ForEach(favorites.items) { favorite in
-                            Button { onOpen(favorite) } label: { tile(favorite) }
-                                .buttonStyle(.plain)
-                                .contextMenu {
-                                    Button("Remove favorite", role: .destructive) {
-                                        favorites.remove(favorite)
-                                    }
-                                }
-                        }
-                    }
-                    .scrollTargetLayout()
-                    .padding()
-                }
-                .rememberedScrollPosition(ScrollPlace.favorites, top: $topItem)
+                list
             }
         }
         .navigationTitle("Favorites")
@@ -350,6 +321,7 @@ struct FavoritesScreen: View {
                 Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
                     .accessibilityLabel("Open menu")
             }
+            ToolbarItem(placement: .primaryAction) { ViewModeMenu() }
         }
         .themedScreen()
         // The grid is drawn from the store, so the content is there on the first
@@ -357,12 +329,49 @@ struct FavoritesScreen: View {
         .task { topItem = scrollMemory.top(for: ScrollPlace.favorites) }
     }
 
+    private var grid: some View {
+        ScrollView {
+            LazyVGrid(columns: mode.gridColumns, spacing: 16) {
+                ForEach(favorites.items) { favorite in
+                    Button { onOpen(favorite) } label: { tile(favorite) }
+                        .buttonStyle(.plain)
+                        .contextMenu { removeMenu(favorite) }
+                }
+            }
+            .scrollTargetLayout()
+            .padding()
+        }
+        .rememberedScrollPosition(ScrollPlace.favorites, top: $topItem)
+    }
+
+    private var list: some View {
+        List {
+            ForEach(favorites.items) { favorite in
+                Button { onOpen(favorite) } label: {
+                    FavoriteRow(favorite: favorite,
+                                artURL: favorite.artworkURL(host: model.host),
+                                username: model.host.username,
+                                password: model.password)
+                }
+                .buttonStyle(.plain)
+                .contextMenu { removeMenu(favorite) }
+            }
+        }
+        .listStyle(.plain)
+        .rememberedScrollPosition(ScrollPlace.favorites, top: $topItem)
+    }
+
+    private func removeMenu(_ favorite: Favorite) -> some View {
+        Button("Remove favorite", role: .destructive) { favorites.remove(favorite) }
+    }
+
     private func tile(_ favorite: Favorite) -> some View {
         PosterTile(url: favorite.artworkURL(host: model.host),
                    title: favorite.title,
                    detail: Self.detailLine(for: favorite.target),
                    username: model.host.username,
-                   password: model.password)
+                   password: model.password,
+                   mode: mode)
     }
 
     /// What kind of place this favourite points at, for the tile's second line.
@@ -380,10 +389,11 @@ struct FavoritesScreen: View {
 struct ChildrenView: View {
     @ObservedObject var model: AppModel
     let request: ChildrenRequest
-    let heading: String
     var onOpenDrawer: (() -> Void)? = nil
 
     @Environment(\.scrollMemory) private var scrollMemory
+    /// The layout every browse screen shares — see `ViewMode`.
+    @AppStorage(ViewMode.storageKey) private var mode = ViewMode.fallback
 
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
@@ -393,20 +403,9 @@ struct ChildrenView: View {
     private var scrollKey: String { ScrollPlace.children(request) }
 
     var body: some View {
-        List {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                Button {
-                    Task {
-                        if let payload = item.playableItem { await model.play(item: payload) }
-                    }
-                } label: {
-                    MediaRow(item: item, username: model.host.username, password: model.password)
-                }
-                .buttonStyle(.plain)
-            }
+        Group {
+            if mode.isGrid { grid } else { list }
         }
-        .listStyle(.plain)
-        .rememberedScrollPosition(scrollKey, top: $topItem)
         .overlay {
             if items.isEmpty {
                 if isLoading {
@@ -427,15 +426,53 @@ struct ChildrenView: View {
                         .accessibilityLabel("Open menu")
                 }
             }
-            ToolbarItem(placement: .primaryAction) {
-                FavoriteButton(title: heading, target: request.favoriteTarget)
-            }
+            ToolbarItem(placement: .primaryAction) { ViewModeMenu() }
         }
         .themedScreen()
         .task {
             await load()
             topItem = scrollMemory.top(for: scrollKey)
         }
+    }
+
+    private var list: some View {
+        List {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                Button {
+                    Task {
+                        if let payload = item.playableItem { await model.play(item: payload) }
+                    }
+                } label: {
+                    MediaRow(item: item, username: model.host.username, password: model.password)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .listStyle(.plain)
+        .rememberedScrollPosition(scrollKey, top: $topItem)
+    }
+
+    private var grid: some View {
+        ScrollView {
+            LazyVGrid(columns: mode.gridColumns, spacing: 16) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    Button {
+                        Task {
+                            if let payload = item.playableItem { await model.play(item: payload) }
+                        }
+                    } label: {
+                        PosterTile(item: item,
+                                   username: model.host.username,
+                                   password: model.password,
+                                   mode: mode)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .scrollTargetLayout()
+            .padding()
+        }
+        .rememberedScrollPosition(scrollKey, top: $topItem)
     }
 
     private func load() async {
@@ -457,19 +494,17 @@ struct FilesScreen: View {
     @ObservedObject var model: AppModel
     let onOpenDrawer: () -> Void
 
+    /// The layout every browse screen shares — see `ViewMode`.
+    @AppStorage(ViewMode.storageKey) private var mode = ViewMode.fallback
+
     @State private var sources: [MediaItem] = []
     @State private var isLoading = true
     @State private var error: String?
 
     var body: some View {
-        List {
-            ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
-                NavigationLink(value: Favorite(title: source.heading, target: .directory(path: source.file))) {
-                    MediaRow(item: source, username: model.host.username, password: model.password, showsChevron: true)
-                }
-            }
+        Group {
+            if mode.isGrid { grid } else { list }
         }
-        .listStyle(.plain)
         .overlay {
             if sources.isEmpty {
                 if isLoading {
@@ -490,7 +525,8 @@ struct FilesScreen: View {
                 Button { onOpenDrawer() } label: { Image(systemName: "line.3.horizontal") }
                     .accessibilityLabel("Open menu")
             }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItemGroup(placement: .primaryAction) {
+                ViewModeMenu()
                 Button {
                     Task { await load() }
                 } label: {
@@ -501,6 +537,36 @@ struct FilesScreen: View {
         }
         .themedScreen()
         .task { await load() }
+    }
+
+    private var list: some View {
+        List {
+            ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
+                NavigationLink(value: Favorite(directoryEntry: source)) {
+                    MediaRow(item: source, username: model.host.username, password: model.password, showsChevron: true)
+                }
+                .contextMenu { FavoriteMenuItem(favorite: Favorite(directoryEntry: source)) }
+            }
+        }
+        .listStyle(.plain)
+    }
+
+    private var grid: some View {
+        ScrollView {
+            LazyVGrid(columns: mode.gridColumns, spacing: 16) {
+                ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
+                    NavigationLink(value: Favorite(directoryEntry: source)) {
+                        PosterTile(item: source,
+                                   username: model.host.username,
+                                   password: model.password,
+                                   mode: mode)
+                    }
+                    .contextMenu { FavoriteMenuItem(favorite: Favorite(directoryEntry: source)) }
+                }
+            }
+            .scrollTargetLayout()
+            .padding()
+        }
     }
 
     private func load() async {
@@ -528,6 +594,10 @@ struct DirectoryView: View {
     var onOpenDrawer: (() -> Void)? = nil
 
     @Environment(\.scrollMemory) private var scrollMemory
+    /// The layout every browse screen shares — see `ViewMode`. It used to be
+    /// derived from the path, which made the same content a grid or a list
+    /// depending on how it was reached.
+    @AppStorage(ViewMode.storageKey) private var mode = ViewMode.fallback
 
     @State private var items: [MediaItem] = []
     @State private var isLoading = true
@@ -536,18 +606,9 @@ struct DirectoryView: View {
 
     private var scrollKey: String { ScrollPlace.directory(path) }
 
-    /// Add-on content browses as a poster grid, matching the library; a
-    /// filesystem folder — the Files browser — stays a list.
-    static func layout(forPath path: String) -> LibraryLayout {
-        path.hasPrefix("plugin://") ? .grid : .list
-    }
-
     var body: some View {
         Group {
-            switch Self.layout(forPath: path) {
-            case .list: list
-            case .grid: grid
-            }
+            if mode.isGrid { grid } else { list }
         }
         .overlay { emptyState }
         .navigationTitle(title)
@@ -559,9 +620,7 @@ struct DirectoryView: View {
                         .accessibilityLabel("Open menu")
                 }
             }
-            ToolbarItem(placement: .primaryAction) {
-                FavoriteButton(title: title, target: .directory(path: path))
-            }
+            ToolbarItem(placement: .primaryAction) { ViewModeMenu() }
         }
         .themedScreen()
         .task {
@@ -596,13 +655,7 @@ struct DirectoryView: View {
 
     private var grid: some View {
         ScrollView {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12),
-                ],
-                spacing: 16
-            ) {
+            LazyVGrid(columns: mode.gridColumns, spacing: 16) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     if item.isDirectory {
                         NavigationLink(value: Favorite(directoryEntry: item)) {
@@ -648,7 +701,8 @@ struct DirectoryView: View {
                    title: item.heading,
                    detail: item.detailLine,
                    username: model.host.username,
-                   password: model.password)
+                   password: model.password,
+                   mode: mode)
     }
 
     private func load() async {

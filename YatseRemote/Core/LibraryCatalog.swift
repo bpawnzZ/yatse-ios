@@ -2,11 +2,6 @@ import Foundation
 
 /// How a section's results are laid out. Poster media reads as a grid; text
 /// media reads as a list. Kept with the section so the browser does not decide.
-enum LibraryLayout: Equatable {
-    case grid
-    case list
-}
-
 /// The library tabs. Method names, property lists and sort methods are the ones
 /// recovered from the Yatse 12.0.0 DEX and validated live against Kodi 21.3.
 enum LibrarySection: String, CaseIterable, Identifiable {
@@ -57,14 +52,6 @@ enum LibrarySection: String, CaseIterable, Identifiable {
         case .tvshows: return "No TV shows in this library."
         case .artists: return "No artists in this library."
         case .albums: return "No albums in this library."
-        }
-    }
-
-    /// Poster media browses as a grid; media read as text browses as a list.
-    var layout: LibraryLayout {
-        switch self {
-        case .movies, .tvshows: return .grid
-        case .artists, .albums: return .list
         }
     }
 
