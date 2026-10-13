@@ -40,7 +40,10 @@ final class ShellNavigationTests: XCTestCase {
                 XCTAssertTrue(destination.isImplemented, "\(shortcut.title) → \(destination.title) is not implemented")
             }
         }
-        // Pictures is a Kodi window command, not a shell destination.
+        // Home and Pictures drive the host instead of switching this app's screen:
+        // Picture opens a window on it, Home sends it to its own home screen.
+        // `RemoteScreen.activate` handles both by name.
+        XCTAssertNil(RemoteShortcut.home.destination)
         XCTAssertNil(RemoteShortcut.pictures.destination)
     }
 
@@ -209,6 +212,10 @@ final class ShellNavigationTests: XCTestCase {
                            "\(shortcut.rawValue) uses a different icon than \(destination.rawValue)")
             XCTAssertEqual(shortcut.title, destination.title)
         }
+        // Home has no destination — its tile drives the host — but it still wears
+        // the drawer Home row's word and mark, so it stays in this check.
+        XCTAssertEqual(RemoteShortcut.home.title, ShellDestination.home.title)
+        XCTAssertEqual(RemoteShortcut.home.systemImage, ShellDestination.home.systemImage)
     }
 
     private func assertSymbolsExist(_ names: [String],
@@ -445,6 +452,14 @@ final class ShellNavigationTests: XCTestCase {
     func testMiniPlayerShownWithAPlayer() {
         XCTAssertTrue(MiniPlayer.isVisible(activePlayer: ActivePlayer(playerid: 0, type: "audio")))
         XCTAssertTrue(MiniPlayer.isVisible(activePlayer: ActivePlayer(playerid: 1, type: "video")))
+    }
+
+    /// The progress line and the time readout are gated on the host reporting a
+    /// duration: a live stream reports none, and "0:00 of 0:00" over an empty line
+    /// is worse than saying nothing.
+    func testMiniPlayerShowsProgressOnlyWithADuration() {
+        XCTAssertTrue(MiniPlayer.showsProgress(durationSeconds: 1485))
+        XCTAssertFalse(MiniPlayer.showsProgress(durationSeconds: 0))
     }
 
     // MARK: Playback state resolution
