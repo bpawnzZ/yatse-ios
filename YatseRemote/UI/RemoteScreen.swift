@@ -1,21 +1,28 @@
 import SwiftUI
 
-/// SF Symbol names for the tiles in the utility row, which is built inline rather
-/// than from an enum like `RemoteShortcut`.
+/// SF Symbol names for the utility and volume rows, both of which are built
+/// inline rather than from an enum like `RemoteShortcut`.
 ///
 /// They live here so the symbol test can see them: a mistyped name draws nothing
 /// and leaves the button tappable, which is how the Movies shortcut shipped
-/// broken. The row and the test read the same constants, so they cannot drift.
+/// broken. The rows and the test read the same constants, so they cannot drift.
 enum RemoteTileSymbol {
     /// The `o` overlay: resolution, video and audio codec, hardware or software
     /// decoding.
     static let playerInfo = "doc.text.magnifyingglass"
-    static let fullscreen = "arrow.up.left.and.arrow.down.right"
+    /// The four corner brackets the reference uses, not two diagonal arrows.
+    /// Nothing in SF Symbols is named `fullscreen`, and `viewfinder` is the
+    /// bracket mark.
+    static let fullscreen = "viewfinder"
     static let info = "info.circle"
     static let keyboard = "keyboard"
     static let menu = "list.bullet"
+    /// The volume row's middle control. It toggles mute, so it carries the mute
+    /// mark whatever the mute state — showing a volume level there made the row
+    /// read as three volume levels with no mute control at all.
+    static let mute = "speaker.slash.fill"
 
-    static let all = [playerInfo, fullscreen, info, keyboard, menu]
+    static let all = [playerInfo, fullscreen, info, keyboard, menu, mute]
 }
 
 /// The Remote: one screen, no scrolling. A flat header with the host name and
@@ -230,7 +237,7 @@ struct RemoteScreen: View {
             smallTile("speaker.wave.1.fill", label: "Volume down") {
                 await model.stepVolume(by: -AppModel.volumeStep)
             }
-            smallTile(model.muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+            smallTile(RemoteTileSymbol.mute,
                       label: model.muted ? "Unmute" : "Mute") {
                 await model.toggleMute()
             }
@@ -402,7 +409,8 @@ struct RemoteScreen: View {
     @ViewBuilder
     private var artworkBackground: some View {
         if let url = backgroundArtworkURL {
-            ArtworkBackground(url: url, username: model.host.username, password: model.password)
+            ArtworkBackground(url: url, username: model.host.username,
+                              password: model.password, blur: theme.artworkBlur)
         }
     }
 

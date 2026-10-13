@@ -62,13 +62,18 @@ enum ArtworkLoader {
     }
 }
 
-/// Full-bleed blurred artwork behind the remote while something is playing. The
-/// scrim is the theme's own tint, so blue stays blue instead of blacking the
-/// artwork out.
+/// Full-bleed artwork behind a surface while something is playing. The scrim is
+/// the theme's own tint, so blue stays blue instead of blacking the artwork out.
+///
+/// The blur is the caller's: the Remote keeps the theme's radius because
+/// `app-shell` requires its backdrop blurred while something plays, and the Now
+/// Playing overlay passes 0 because its own requirement is a sharp artwork.
 struct ArtworkBackground: View {
     let url: URL?
     let username: String
     let password: String
+    /// No default, so a new call site has to choose which of the two it wants.
+    let blur: CGFloat
 
     @Environment(\.remoteTheme) private var theme
     @State private var image: UIImage?
@@ -84,7 +89,7 @@ struct ArtworkBackground: View {
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .clipped()
-            .blur(radius: theme.artworkBlur)
+            .blur(radius: blur)
             .overlay(theme.artworkScrim)
             .ignoresSafeArea()
         }
