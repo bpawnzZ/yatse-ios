@@ -82,10 +82,11 @@ enum ShellDestination: String, CaseIterable, Identifiable {
     static let secondary: [ShellDestination] = [.settings, .about]
 }
 
-/// The five quick links shown under the Remote's app bar. Four are destinations
-/// and take their name and icon from them; Pictures is a Kodi window command, so
-/// it stands alone. Delegating here is what keeps this row and the drawer from
-/// showing different icons for the same thing.
+/// The five quick links shown under the Remote's app bar. Three are in-app
+/// destinations and take their name and icon from them; Home and Pictures drive
+/// the host instead. Delegating here is what keeps this row and the drawer from
+/// showing different icons for the same thing — including Home, whose tile drives
+/// the host but still wears the drawer Home row's word and mark.
 enum RemoteShortcut: String, CaseIterable, Identifiable {
     case home
     case movies
@@ -96,22 +97,28 @@ enum RemoteShortcut: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
-        destination?.title ?? "Pictures"
+        if let destination { return destination.title }
+        return self == .home ? ShellDestination.home.title : "Pictures"
     }
 
     var systemImage: String {
-        destination?.systemImage ?? "photo.stack"
+        if let destination { return destination.systemImage }
+        return self == .home ? ShellDestination.home.systemImage : "photo.stack"
     }
 
-    /// The shell destination this shortcut jumps to, or nil when it is a Kodi
-    /// window rather than an in-app destination.
+    /// The shell destination this shortcut switches the app to, or nil when the
+    /// tile drives the host instead.
+    ///
+    /// Home is nil on purpose. The drawer's Home row switches this app's screen;
+    /// the Remote's Home tile sends the host's own Home — where its Home button
+    /// and backing out of a library both land — because one tile in a row of host
+    /// controls should not be the only one that never reaches the host.
     var destination: ShellDestination? {
         switch self {
-        case .home: return .home
+        case .home, .pictures: return nil
         case .movies: return .movies
         case .tvShows: return .tvShows
         case .music: return .music
-        case .pictures: return nil
         }
     }
 }

@@ -426,6 +426,21 @@ final class AppModel: ObservableObject {
         await send("GUI.ActivateWindow", ["window": window])
     }
 
+    /// The host's own home screen — `Input.Home`, the method a remote's Home
+    /// button sends, so it lands where the host's Home button and backing out of
+    /// a library land. One call rather than a walk of Backs.
+    ///
+    /// Measured on the box: this moved it `10032 'Settings - Interface'` →
+    /// `10000 'Home'`. The two calls that look equivalent are not —
+    /// `GUI.ActivateWindow {"window": "Home"}` and `Input.ExecuteAction
+    /// {"action": "home"}` both come back invalid-params, because `window` and
+    /// `action` are enums and neither name is in them. Not verified over
+    /// fullscreen playback: that would mean starting a video on Alpha's box.
+    @MainActor
+    func goToKodiHome() async {
+        await send("Input.Home")
+    }
+
     @MainActor
     func play(item payload: [String: Any]) async {
         await send("Player.Open", ["item": payload])

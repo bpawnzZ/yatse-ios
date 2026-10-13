@@ -423,10 +423,17 @@ struct RemoteScreen: View {
     }
 
     private func activate(_ shortcut: RemoteShortcut) {
-        if let destination = shortcut.destination {
-            onSelect(destination)
-        } else {
+        // Exhaustive with no `default`: a tile added later cannot compile until
+        // someone decides what it does. The previous shape — destination or else
+        // the Pictures window — decided silently, which is how Home came to be
+        // the one tile that never touched the host.
+        switch shortcut {
+        case .home:
+            Task { await model.goToKodiHome() }
+        case .pictures:
             Task { await model.openInKodi(window: "Pictures") }
+        case .movies, .tvShows, .music:
+            if let destination = shortcut.destination { onSelect(destination) }
         }
     }
 }
