@@ -474,6 +474,21 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertEqual(AppModel.resolvedPlayer(answer: [audio], previous: nil), audio)
     }
 
+    // MARK: Connection recovery
+
+    /// The latched-handshake bug: a handshake that timed out left the status
+    /// failed, and with it live state dead — the ticker and the event stream were
+    /// both skipped, so the now-playing bar could never appear, while every other
+    /// call still reached the host. A poll that succeeds is proof the host is
+    /// answering, so it revives the status. `.idle` is a deliberate disconnect and
+    /// must never be revived.
+    func testASuccessfulPollRevivesOnlyAFailedStatus() {
+        XCTAssertTrue(AppModel.revivesFromFailure(.failed("The request timed out.")))
+        XCTAssertFalse(AppModel.revivesFromFailure(.connected))
+        XCTAssertFalse(AppModel.revivesFromFailure(.connecting))
+        XCTAssertFalse(AppModel.revivesFromFailure(.idle))
+    }
+
     // MARK: Volume clamp
 
     func testVolumeClamp() {

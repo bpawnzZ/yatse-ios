@@ -75,11 +75,16 @@ final class AppModel: ObservableObject {
             status = .connected
             startEventStream()
             await refresh()
-            startTicker()
         } catch {
             status = .failed(error.localizedDescription)
             clearPlaybackState()
         }
+        // Started whichever way the handshake went. A handshake that failed on a
+        // timeout is usually transient, and the poll is what recovers it: with the
+        // ticker skipped, the failure latched — nothing ever refreshed player state
+        // again, so the mini-player could never appear, while every other call
+        // still reached the host and the app looked connected.
+        startTicker()
     }
 
     @MainActor
@@ -123,13 +128,26 @@ final class AppModel: ObservableObject {
 
     /// `light` skips the playlist fetch — used by the 1 Hz progress ticker and
     /// by notification-driven refreshes.
+    ///
+    /// Gated on the host being active rather than on the status already saying
+    /// connected: a status left failed by a handshake is one of the states this is
+    /// here to fix, so refusing to poll in it is what made the failure permanent.
+    /// `.idle` is the one status that means the user left this host, and it is
+    /// never polled or revived.
     @MainActor
     func refresh(light: Bool = false) async {
-        guard status.isConnected else { return }
+        guard status != .idle else { return }
         do {
             let app = try await client.applicationProperties()
             volume = app.volume
             muted = app.muted
+
+            // The host answered, so a failure left by the handshake is spent:
+            // revive the status, and the event stream that failure skipped.
+            if Self.revivesFromFailure(status) {
+                status = .connected
+                startEventStream()
+            }
 
             let players = try await client.activePlayers()
             activePlayer = Self.resolvedPlayer(answer: players, previous: activePlayer)
@@ -155,7 +173,10 @@ final class AppModel: ObservableObject {
             if !light { await loadPlaylist() }
             lastError = nil
         } catch {
-            lastError = error.localizedDescription
+            // While the status is itself the failure, the status line already
+            // carries this sentence — setting the caption too prints it twice on
+            // the same screen.
+            if status.isConnected { lastError = error.localizedDescription }
         }
     }
 
@@ -519,6 +540,20 @@ extension AppModel {
     static func resolvedPlayer(answer: [ActivePlayer]?, previous: ActivePlayer?) -> ActivePlayer? {
         guard let answer else { return previous }
         return answer.first(where: { $0.isVideo }) ?? answer.first
+    }
+
+    /// Whether a poll that succeeded should revive the status, and with it the
+    /// event stream the handshake skipped.
+    ///
+    /// `.failed` is the half-connected state a timed-out handshake leaves behind:
+    /// every other call still reaches the host, so a poll that answers proves the
+    /// connection is fine and the failure is spent. `.idle` is a deliberate
+    /// disconnect and must never be revived, and a poll that succeeds while
+    /// already connected has nothing to do. Pure so the rule is unit-testable
+    /// without a host.
+    static func revivesFromFailure(_ status: Status) -> Bool {
+        if case .failed = status { return true }
+        return false
     }
 }
 
