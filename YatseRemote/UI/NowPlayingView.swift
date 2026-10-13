@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The full-screen Now Playing surface, opened from the mini-player. The current
-/// item's artwork is a see-through backdrop under a translucent scrim; the seek
-/// slider, transport row, repeat/shuffle, stream pickers, info and the queue sit
+/// item's sharp artwork is the backdrop under a translucent scrim; the playback
+/// control row, the transport row, the seek track, info, share and the queue sit
 /// over it.
 struct NowPlayingView: View {
     @ObservedObject var model: AppModel
@@ -20,7 +20,7 @@ struct NowPlayingView: View {
     var body: some View {
         ZStack {
             // Pull down over the artwork to close, the way a sheet dismisses. It sits
-            // on the backdrop rather than over the whole screen so the seek slider and
+            // on the backdrop rather than over the whole screen so the seek track and
             // the transport buttons keep the gestures they need.
             backdrop
                 .gesture(dismissPull)
@@ -29,9 +29,11 @@ struct NowPlayingView: View {
                 header
                     .gesture(dismissPull)
                 Spacer(minLength: 0)
-                seekSection
-                transportSection
+                // The reference's own vertical order, read from its layout: the
+                // playback control row, then the transport row, then the seek bar.
                 optionsSection
+                transportSection
+                seekSection
                 Spacer(minLength: 0)
             }
             .padding()
@@ -59,7 +61,8 @@ struct NowPlayingView: View {
     @ViewBuilder
     private var backdrop: some View {
         if let url = backdropURL {
-            ArtworkBackground(url: url, username: model.host.username, password: model.password)
+            ArtworkBackground(url: url, username: model.host.username,
+                              password: model.password, blur: 0)
         } else {
             theme.background.ignoresSafeArea()
         }
@@ -103,6 +106,11 @@ struct NowPlayingView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Info")
 
+            ShareLink(item: shareDescription) {
+                headerIcon("square.and.arrow.up")
+            }
+            .accessibilityLabel("Share")
+
             Button { showingQueue = true } label: {
                 headerIcon("list.bullet")
             }
@@ -123,15 +131,19 @@ struct NowPlayingView: View {
 
     private var seekSection: some View {
         VStack(spacing: 4) {
-            Slider(
-                value: $seekTarget,
-                in: 0...max(model.durationSeconds, 1),
-                onEditingChanged: { editing in
-                    isSeeking = editing
-                    if !editing { Task { await model.seek(toSeconds: seekTarget) } }
+            SeekTrack(
+                fraction: SeekFraction.of(position: seekTarget, duration: model.durationSeconds),
+                color: contentColor,
+                valueLabel: "\(TimeText.mmss(seekTarget)) of \(TimeText.mmss(model.durationSeconds))",
+                onScrub: { fraction in
+                    isSeeking = true
+                    seekTarget = fraction * model.durationSeconds
+                },
+                onCommit: {
+                    isSeeking = false
+                    Task { await model.seek(toSeconds: seekTarget) }
                 }
             )
-            .tint(contentColor)
             .disabled(model.durationSeconds <= 0)
 
             HStack {
@@ -153,7 +165,6 @@ struct NowPlayingView: View {
             playPauseButton
             transport("goforward.10") { await model.stepSeek("smallforward") }
             transport("forward.end.fill") { await model.next() }
-            transport("stop.fill") { await model.stopPlayback() }
         }
         .foregroundStyle(contentColor)
     }
@@ -187,13 +198,17 @@ struct NowPlayingView: View {
 
     // MARK: Options
 
+    /// One row of playback controls, above the transport row, in the order the
+    /// reference uses: repeat, audio stream, stop, subtitles, aspect ratio,
+    /// shuffle. Stop lives here rather than in the transport row.
     private var optionsSection: some View {
         HStack(spacing: 12) {
             optionButton(repeatSymbol, active: repeatActive) { await model.cycleRepeat() }
-            optionButton("shuffle", active: model.properties?.shuffled ?? false) { await model.toggleShuffle() }
             audioMenu
+            optionButton("stop.fill") { await model.stopPlayback() }
             subtitleMenu
             optionButton("aspectratio") { await model.cycleAspect() }
+            optionButton("shuffle", active: model.properties?.shuffled ?? false) { await model.toggleShuffle() }
         }
         .foregroundStyle(contentColor)
     }
@@ -302,6 +317,76 @@ struct NowPlayingView: View {
     }
 
     private var subtitle: String { model.item?.subtitleLine ?? "" }
+
+    /// What the share sheet carries. The overlay only opens with an item, but a
+    /// host between tracks still gets a title rather than an empty string.
+    private var shareDescription: String {
+        [title, subtitle].filter { !$0.isEmpty }.joined(separator: " — ")
+    }
+}
+
+/// Position on the seek track as a 0–1 fraction of the duration. A duration of
+/// zero — nothing playing, or a live stream — reads as the start of the track
+/// rather than dividing by zero. Pure, so the tests cover it without a screen.
+enum SeekFraction {
+    static func of(position: Double, duration: Double) -> Double {
+        guard duration > 0 else { return 0 }
+        return min(max(position / duration, 0), 1)
+    }
+}
+
+/// The seek track: a thin line with a small thumb. `Slider`'s own knob cannot be
+/// made small and reads as an oversized pill over the backdrop, so the track is
+/// drawn here. Dragging anywhere along it scrubs.
+struct SeekTrack: View {
+    let fraction: Double
+    let color: Color
+    /// Spoken by VoiceOver in place of the drawn times.
+    let valueLabel: String
+    let onScrub: (Double) -> Void
+    let onCommit: () -> Void
+
+    private let trackHeight: CGFloat = 3
+    private let thumbSize: CGFloat = 9
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = max(geo.size.width, 1)
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(color.opacity(0.3))
+                    .frame(height: trackHeight)
+                Capsule()
+                    .fill(color)
+                    .frame(width: width * clamped(fraction), height: trackHeight)
+                Circle()
+                    .fill(color)
+                    .frame(width: thumbSize, height: thumbSize)
+                    .offset(x: width * clamped(fraction) - thumbSize / 2)
+            }
+            .frame(height: thumbSize)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { onScrub(clamped(Double($0.location.x / width))) }
+                    .onEnded { _ in onCommit() }
+            )
+        }
+        .frame(height: thumbSize)
+        .accessibilityElement()
+        .accessibilityLabel("Playback position")
+        .accessibilityValue(Text(valueLabel))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: onScrub(clamped(fraction + 0.05))
+            case .decrement: onScrub(clamped(fraction - 0.05))
+            default: return
+            }
+            onCommit()
+        }
+    }
+
+    private func clamped(_ value: Double) -> Double { min(max(value, 0), 1) }
 }
 
 /// The current item's details, shown from the overlay without leaving it.
