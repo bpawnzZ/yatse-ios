@@ -9,6 +9,14 @@ enum FavoriteTarget: Codable, Hashable {
     case episodes(tvshowID: Int)
     case albumsOfArtist(artistID: Int)
     case directory(path: String)
+    /// The item that was playing when it was saved from the full player — a video
+    /// or a song.
+    ///
+    /// Keyed on the file the host reports for it, not on a library id: the host
+    /// refuses `id` in `Player.GetItem`'s property list and does not volunteer one
+    /// either, so an id is not available to save. `kind` is the host's own item
+    /// type, kept only so the Favorites tile can say what it is.
+    case media(file: String, kind: String)
 
     /// Stable identity for a target. Saving the same place twice must replace
     /// rather than append, and the star buttons decide filled-vs-outline from
@@ -19,7 +27,16 @@ enum FavoriteTarget: Codable, Hashable {
         case .episodes(let id): return "episodes:\(id)"
         case .albumsOfArtist(let id): return "albums:\(id)"
         case .directory(let path): return "directory:\(path)"
+        // The same file is the same item; the kind is a label, not identity.
+        case .media(let file, _): return "media:\(file)"
         }
+    }
+
+    /// The `Player.Open` payload that opens this target, or nil when it names no
+    /// playable item — the four place cases, which are navigated to instead.
+    var playableItem: [String: Any]? {
+        guard case .media(let file, _) = self, !file.isEmpty else { return nil }
+        return ["file": file]
     }
 }
 
@@ -52,6 +69,24 @@ extension Favorite {
     init(directoryEntry item: MediaItem) {
         self.init(title: item.heading,
                   target: .directory(path: item.file),
+                  art: item.art,
+                  thumbnail: item.thumbnail)
+    }
+
+    /// Saving what is playing, from the star on the full player.
+    ///
+    /// Failable on purpose: with no file there is nothing to replay, and with no
+    /// title and no label there is nothing to identify the tile, so both cases
+    /// leave the overlay without a star rather than saving a favourite that cannot
+    /// be opened or named.
+    ///
+    /// The title follows the overlay's own rule — the item's title, falling back to
+    /// its label — so the star and the header it sits in name the item the same way.
+    init?(playing item: PlayerItem) {
+        let name = item.title.isEmpty ? item.label : item.title
+        guard !item.file.isEmpty, !name.isEmpty else { return nil }
+        self.init(title: name,
+                  target: .media(file: item.file, kind: item.type),
                   art: item.art,
                   thumbnail: item.thumbnail)
     }

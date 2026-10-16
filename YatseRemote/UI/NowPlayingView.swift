@@ -7,6 +7,9 @@ import SwiftUI
 struct NowPlayingView: View {
     @ObservedObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
+    /// The same store the long-press menus write to, so the star reflects a save
+    /// made anywhere — and a removal made from the Favorites grid.
+    @EnvironmentObject private var favorites: FavoriteStore
 
     @State private var seekTarget: Double = 0
     @State private var isSeeking = false
@@ -100,6 +103,18 @@ struct NowPlayingView: View {
             }
             Spacer(minLength: 0)
 
+            // The one thing the overlay can keep for later. Drawn from the model
+            // rather than from local state, and absent when there is nothing to
+            // save — see `favorite`.
+            if let favorite {
+                let saved = favorites.contains(favorite.target)
+                Button { toggle(favorite) } label: {
+                    headerIcon(saved ? "star.fill" : "star")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(saved ? "Remove from Favorites" : "Add to Favorites")
+            }
+
             Button { showingInfo = true } label: {
                 headerIcon("info.circle")
             }
@@ -125,6 +140,23 @@ struct NowPlayingView: View {
             .font(.title3)
             .frame(width: 44, height: 44)
             .contentShape(Rectangle())
+    }
+
+    /// The playing item as something worth keeping, or nil when there is nothing
+    /// to replay or nothing to name it with. The star is drawn from this, so
+    /// "cannot be saved here" is an absent control rather than a dead one.
+    private var favorite: Favorite? {
+        model.item.flatMap { Favorite(playing: $0) }
+    }
+
+    /// The long-press menu's own semantics: one control that adds when absent and
+    /// removes when present.
+    private func toggle(_ favorite: Favorite) {
+        if favorites.contains(favorite.target) {
+            favorites.remove(favorite)
+        } else {
+            favorites.toggle(favorite)
+        }
     }
 
     // MARK: Seek

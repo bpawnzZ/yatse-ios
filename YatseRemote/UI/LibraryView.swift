@@ -304,9 +304,9 @@ struct FavoritesScreen: View {
     var body: some View {
         Group {
             if favorites.items.isEmpty {
-                // The only place that teaches the gesture, now the toolbar star is
-                // gone: saving a place is a long press on it.
-                Text("Nothing saved yet. Long-press a folder, a show or an artist to save it here.")
+                // The only place that teaches the gestures: a place is a long press,
+                // and what is playing is the star on the full player.
+                Text("Nothing saved yet. Long-press a folder, a show or an artist to save it here, or use the star on the full player to keep what is playing.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -387,6 +387,15 @@ struct FavoritesScreen: View {
         case .episodes: return "Episodes"
         case .albumsOfArtist: return "Albums"
         case .directory(let path): return path.hasPrefix("plugin://") ? "Add-on" : "Folder"
+        case .media(_, let kind):
+            // The host's own item type. An unrecognised one says "Media" rather than
+            // leaving the tile's second line blank.
+            switch kind {
+            case "movie": return "Movie"
+            case "episode": return "Episode"
+            case "song": return "Song"
+            default: return "Media"
+            }
         }
     }
 }
