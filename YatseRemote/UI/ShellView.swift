@@ -117,6 +117,13 @@ struct ShellView: View {
             // back to it lands here rather than on something already left.
             memory.record(pushed, for: destination)
             withAnimation { drawerOpen = false }
+        case .media:
+            // A saved item is played rather than navigated to: no screen stands for
+            // it, so there is nothing to push and nothing to remember. The payload is
+            // the same `Player.Open` the library tiles send.
+            if let payload = favorite.target.playableItem {
+                Task { await model.play(item: payload) }
+            }
         }
     }
 
@@ -137,8 +144,9 @@ struct ShellView: View {
             DirectoryView(model: model, path: directory, title: favorite.title,
                           onOpenDrawer: openDrawer,
                           onOpenRemote: { select(.remote) })
-        case .section:
-            // A section switches destination; there is nothing to push.
+        case .section, .media:
+            // A section switches destination and a media favourite plays; neither is
+            // a screen to push.
             EmptyView()
         }
     }

@@ -172,4 +172,90 @@ final class FavoritesTests: XCTestCase {
         XCTAssertEqual(FavoritesScreen.detailLine(for: .directory(path: "plugin://p.v/")), "Add-on")
         XCTAssertEqual(FavoritesScreen.detailLine(for: .directory(path: "/media/films")), "Folder")
     }
+
+    /// A favourite saved from the player lines up under the host's own item type,
+    /// and an unrecognised one says "Media" rather than leaving the line blank.
+    func testFavouriteDetailLineNamesThePlayingKind() {
+        XCTAssertEqual(FavoritesScreen.detailLine(for: .media(file: "/x.mkv", kind: "movie")), "Movie")
+        XCTAssertEqual(FavoritesScreen.detailLine(for: .media(file: "/x.mkv", kind: "episode")), "Episode")
+        XCTAssertEqual(FavoritesScreen.detailLine(for: .media(file: "/x.mp3", kind: "song")), "Song")
+        XCTAssertEqual(FavoritesScreen.detailLine(for: .media(file: "/x.ts", kind: "channel")), "Media")
+    }
+
+    // MARK: Saving what is playing
+
+    /// The live shape the box reported for the item playing when this was measured —
+    /// `KodiModelTests.livePlayerItem`, trimmed. Note what is here: `type`, `file`,
+    /// `title`, `label`, `art`. And what is not: any library id, which is why the
+    /// file is the key.
+    private static let playingMovie = #"""
+    {"album":"", "art":{"poster":"image://http%3a%2f%2fbox%3a8096%2fItems%2fx%2fImages%2fPrimary%2f0/"}, "artist":[], "episode":-1, "fanart":"", "file":"http://10.13.13.2:8096/Videos/5c6b025c8497c194381a5a02306b05c9/stream?static=True&PlaySessionId=0ecbe6d7ac8b48e389be583a14bd670e", "label":"CL", "runtime":1810, "season":-1, "showtitle":"", "thumbnail":"image://x.png/", "title":"CL", "type":"movie"}
+    """#
+
+    private func playing(_ json: String) throws -> PlayerItem {
+        try JSONDecoder().decode(PlayerItem.self, from: Data(json.utf8))
+    }
+
+    func testAFavouriteSavedFromThePlayerReplaysThatFile() throws {
+        let item = try playing(Self.playingMovie)
+        let favorite = try XCTUnwrap(Favorite(playing: item))
+
+        XCTAssertEqual(favorite.title, "CL")
+        XCTAssertEqual(favorite.target, .media(file: item.file, kind: "movie"))
+        XCTAssertEqual(favorite.target.playableItem?["file"] as? String, item.file)
+
+        let store = FavoriteStore()
+        store.toggle(favorite)
+        XCTAssertTrue(store.contains(favorite.target))
+        XCTAssertEqual(store.items.count, 1)
+    }
+
+    /// Identity is the file, not the kind: the same item saved again — with whatever
+    /// type or title the host reports this time — replaces rather than duplicating.
+    func testAMediaFavouriteIsKeyedOnItsFileNotItsKind() {
+        let file = "smb://box/films/film.mkv"
+        let store = FavoriteStore()
+        store.toggle(Favorite(title: "Film", target: .media(file: file, kind: "movie")))
+        store.toggle(Favorite(title: "Film (2)", target: .media(file: file, kind: "episode")))
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertEqual(store.items.first?.title, "Film (2)")
+    }
+
+    /// The star's favourite is read back by a later launch, payload included — the
+    /// store decodes with `try?`, so a case that did not round-trip would vanish
+    /// without a word.
+    func testAMediaFavouriteSurvivesAReload() throws {
+        let item = try playing(Self.playingMovie)
+        let favorite = try XCTUnwrap(Favorite(playing: item))
+        FavoriteStore().toggle(favorite)
+
+        let reloaded = FavoriteStore()
+        XCTAssertTrue(reloaded.contains(favorite.target))
+        XCTAssertEqual(reloaded.items.first?.target.playableItem?["file"] as? String, item.file)
+    }
+
+    /// Nothing to replay, or nothing to name it with, means no star — the overlay
+    /// draws it from this, so it is absent rather than dead.
+    func testAPlayingItemWithNothingToSaveHasNoFavourite() throws {
+        let noFile = try playing(#"{"title":"Live stream","type":"unknown","file":""}"#)
+        XCTAssertNil(Favorite(playing: noFile))
+
+        let noName = try playing(#"{"title":"","label":"","file":"smb://box/film.mkv","type":"movie"}"#)
+        XCTAssertNil(Favorite(playing: noName))
+    }
+
+    /// The name follows the overlay's own rule: the title, falling back to the label.
+    func testASavedItemTakesTheOverlaysNameForIt() throws {
+        let item = try playing(#"{"title":"","label":"CL","file":"smb://box/film.mkv","type":"movie"}"#)
+        XCTAssertEqual(Favorite(playing: item)?.title, "CL")
+    }
+
+    /// Only an item is playable. A place is navigated to, and an item with no file
+    /// has no payload to send.
+    func testOnlyAMediaFavouriteHasAPlayableItem() {
+        XCTAssertNil(FavoriteTarget.section("movies").playableItem)
+        XCTAssertNil(FavoriteTarget.directory(path: "/media").playableItem)
+        XCTAssertNil(FavoriteTarget.episodes(tvshowID: 1).playableItem)
+        XCTAssertNil(FavoriteTarget.media(file: "", kind: "movie").playableItem)
+    }
 }

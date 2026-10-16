@@ -149,6 +149,24 @@ final class KodiClient {
     /// Kodi's window id for fullscreen playback (`Fullscreen video`).
     static let fullscreenVideoWindowID = 12005
 
+    /// The fields asked for from `Player.GetItem`.
+    ///
+    /// **`id` must not be added, however natural it looks.** The box refuses the
+    /// whole call — `Invalid params`, `array element at index 11 does not match`,
+    /// `Item.Fields.Base` — and every field name here is validated together, so
+    /// asking for an id would break the 1 Hz poll that keeps the mini-player and
+    /// the overlay alive, not just whichever caller wanted the id.
+    ///
+    /// The consequence is deliberate: a playing item's library id is not obtainable
+    /// (the box does not volunteer one either — see the live response in
+    /// `KodiModelTests`), so a favourite saved from the player is keyed on `file`.
+    /// Measured on Kodi 21.3 with `~/reverseEngineer/yatse/probe_player_item_fields.py`.
+    static let playerItemProperties = [
+        "title", "artist", "album", "thumbnail", "fanart", "showtitle",
+        "season", "episode", "runtime", "file", "art",
+        "plot", "year", "genre",
+    ]
+
     /// Whether the box is sitting in fullscreen playback right now — the one state
     /// where Kodi reads the arrow keys as seeks rather than focus moves.
     ///
@@ -184,16 +202,11 @@ final class KodiClient {
 
     func currentItem(playerid: Int) async throws -> PlayerItem {
         // Kodi wraps this one: `result` is `{"item": {...}}`, not the item itself.
+        // The property list lives on `playerItemProperties` — read why `id` is not
+        // in it before adding to it.
         let payload = try await call(
             "Player.GetItem",
-            params: [
-                "playerid": playerid,
-                "properties": [
-                    "title", "artist", "album", "thumbnail", "fanart", "showtitle",
-                    "season", "episode", "runtime", "file", "art",
-                    "plot", "year", "genre",
-                ],
-            ],
+            params: ["playerid": playerid, "properties": Self.playerItemProperties],
             as: ItemPayload.self
         )
         return payload.item

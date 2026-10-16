@@ -80,6 +80,26 @@ final class KodiModelTests: XCTestCase {
         XCTAssertNotNil(Artwork.poster(for: item.art, thumbnail: item.thumbnail))
     }
 
+    /// The property list must never grow an `id`, however natural it looks: the box
+    /// refuses the *whole* call — `array element at index 11 does not match` — and
+    /// this is the 1 Hz poll behind the mini-player and the overlay, so asking for an
+    /// id would blank playback state rather than fail one caller. `file` has to stay,
+    /// because a favourite saved from the player replays through it.
+    func testPlayerItemPropertiesNeverAskForAnId() {
+        XCTAssertFalse(KodiClient.playerItemProperties.contains("id"))
+        XCTAssertTrue(KodiClient.playerItemProperties.contains("file"))
+    }
+
+    /// And the box does not volunteer an id either: this is the live response, and
+    /// it carries none. That is why the playing item's `file` is what a favourite
+    /// records.
+    func testTheLivePlayerItemCarriesNoLibraryId() throws {
+        let item = try result(ItemPayload.self, from: Self.livePlayerItem).item
+
+        XCTAssertNil(item.id)
+        XCTAssertFalse(item.file.isEmpty)
+    }
+
     func testPlayerItemDecodesPlotYearGenre() throws {
         let item = try result(ItemPayload.self, from: #"""
         {"jsonrpc": "2.0", "result": {"item": {"title": "Film", "plot": "A plot.", "year": 1999, "genre": ["Drama", "Comedy"]}}}
