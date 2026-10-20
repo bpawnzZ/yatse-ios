@@ -443,7 +443,36 @@ final class AppModel: ObservableObject {
 
     @MainActor
     func play(item payload: [String: Any]) async {
+        // A Player.Open that lands while the previous film is still stopping fails
+        // intermittently on the box, so a replacement is stop → 1.5 s → open. The
+        // box is asked rather than reading `activePlayer`: the poll stops when the
+        // app is backgrounded, and a stale nil is the exact bug being fixed. A
+        // failed ask means "idle", which is the old behaviour, not a dead tap.
+        let players = (try? await client.activePlayers()) ?? []
+        if case .stopThenOpen(let playerid) = Self.replacement(for: players) {
+            await send("Player.Stop", ["playerid": playerid])
+            try? await Task.sleep(for: Self.replacePause)
+        }
         await send("Player.Open", ["item": payload])
+    }
+
+    /// How long to let the box settle between stopping and opening. The desktop
+    /// client uses the same number against the same box (`desktop-stop-before-play`).
+    static let replacePause: Duration = .milliseconds(1500)
+
+    /// What has to happen before `Player.Open`. Pure, so CI can check the rule with
+    /// no box on the runner.
+    enum PlaybackReplacement: Equatable {
+        case immediate
+        case stopThenOpen(playerid: Int)
+    }
+
+    /// Only a **video** player is stopped: that is the reported failure. A video
+    /// takes the player from music without it, so stopping audio first would only
+    /// add the wait to a path that already works.
+    static func replacement(for players: [ActivePlayer]) -> PlaybackReplacement {
+        guard let playing = players.first(where: { $0.isVideo }) else { return .immediate }
+        return .stopThenOpen(playerid: playing.playerid)
     }
 
     @MainActor
