@@ -52,13 +52,65 @@ enum ArtworkLoader {
             request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
         }
 
-        guard let (data, response) = try? await URLSession.shared.data(for: request),
+        guard let (data, response) = try? await ArtworkSession.shared.data(for: request),
               let http = response as? HTTPURLResponse,
               (200..<300).contains(http.statusCode),
               let image = UIImage(data: data) else { return nil }
 
         ArtworkCache.shared.store(image, for: url)
         return image
+    }
+}
+
+/// The session every artwork fetch goes through, because add-on artwork is the
+/// one place this app talks to a server the *user* configured rather than the
+/// host it already trusts.
+///
+/// Concretely: JellyCon hands back `https://10.13.13.2:54406/Items/…` and that
+/// server's certificate is issued by a home-lab CA (`LUCABRASI Local CA`) which
+/// no device has been told to trust, so `URLSession` refuses the handshake and
+/// the tile falls back to a placeholder — with no error anywhere. Everything
+/// else worked: PKC's artwork is `plex.direct` (a certificate the device already
+/// accepts) and library artwork is plain `http`.
+///
+/// So the exception is scoped to where it can apply: a **private or loopback
+/// address**, or a `.local` name, is accepted; a public hostname still has to
+/// validate normally, which is why `plex.direct`/`ytimg`/TMDB keep their real
+/// chain. This is a deliberate, documented downgrade for LAN servers with
+/// self-signed certificates — the alternative is asking the user to install the
+/// CA profile on the device, which fixes one CA and not the next add-on's.
+final class ArtworkSession: NSObject, URLSessionDelegate {
+    static let shared: URLSession = URLSession(
+        configuration: .default,
+        delegate: ArtworkSession(),
+        delegateQueue: nil
+    )
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let trust = challenge.protectionSpace.serverTrust,
+              Self.isLocal(challenge.protectionSpace.host) else {
+            return completionHandler(.performDefaultHandling, nil)
+        }
+        completionHandler(.useCredential, URLCredential(trust: trust))
+    }
+
+    /// The scope of the exception above — pure so it can be tested without a host.
+    static func isLocal(_ host: String) -> Bool {
+        if host == "localhost" || host.hasSuffix(".local") { return true }
+        // A public hostname has no numeric octets, so it never gets here.
+        let octets = host.split(separator: ".").compactMap { Int($0) }
+        guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else { return false }
+        switch (octets[0], octets[1]) {
+        case (10, _), (127, _): return true         // 10/8, loopback
+        case (192, 168): return true                // 192.168/16
+        case (172, 16...31): return true            // 172.16/12
+        default: return false
+        }
     }
 }
 
