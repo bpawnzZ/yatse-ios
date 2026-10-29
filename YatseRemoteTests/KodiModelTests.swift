@@ -230,6 +230,32 @@ final class KodiModelTests: XCTestCase {
         XCTAssertNil(Artwork.url("", host: host))
     }
 
+    /// The value Kodi actually sends carries Kodi's own trailing slash, and the
+    /// image endpoint answers **404** for that shape — measured on the live box:
+    /// `/image/%2f…icon.png/` is 404, `/image/%2f…icon.png` is the real PNG.
+    /// `ArtworkLoader` draws the placeholder on any non-2xx, so this one slash
+    /// is what blanked every add-on tile.
+    func testAddonArtworkTrimsKodisTrailingSlash() {
+        var host = Host()
+        host.address = "10.13.13.7"
+        host.port = 8080
+
+        let served = "http://10.13.13.7:8080/image/%2fstorage%2f.kodi%2faddons"
+            + "%2fplugin.video.youtube%2ficon.png"
+        let raw = "image://%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png/"
+
+        XCTAssertEqual(Artwork.url(raw, host: host)?.absoluteString, served)
+
+        // Kodi's doubled slash is malformed but harmless to normalise.
+        XCTAssertEqual(Artwork.url(raw + "/", host: host)?.absoluteString, served)
+
+        // The grids go through the poster overload, so it has to agree.
+        XCTAssertEqual(
+            Artwork.poster(for: ["thumb": raw], thumbnail: "", host: host)?.absoluteString,
+            served
+        )
+    }
+
     // MARK: Host
 
     func testHostBuildsEndpoints() {

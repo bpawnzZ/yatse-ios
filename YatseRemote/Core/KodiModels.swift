@@ -494,6 +494,12 @@ enum Artwork {
 
         var value = raw
         if value.hasPrefix("image://") { value = String(value.dropFirst("image://".count)) }
+        // Kodi's `image://` grammar keeps a trailing slash on the value
+        // (`image://%2fstorage%2f…%2ficon.png/`) and the image endpoint answers
+        // **404** for it — measured, both with and without the scheme — while the
+        // same path without it is the real PNG. Nothing else may strip it:
+        // `AddonsScreen`, `DirectoryView` and favourites all end up here.
+        while value.hasSuffix("/") { value.removeLast() }
         components.percentEncodedPath = "/image/" + value
         components.query = nil
         components.fragment = nil
