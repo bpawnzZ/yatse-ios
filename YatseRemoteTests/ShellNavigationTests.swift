@@ -184,9 +184,12 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertEqual(ShellDestination.movies.returnTarget(whenSelecting: .remote), .movies)
     }
 
-    func testOnlyTheRemoteHasSomewhereToReturnTo() {
-        for destination in ShellDestination.allCases where destination != .remote {
-            for item in ShellDestination.allCases {
+    func testOnlySelectingTheRemoteSetsAWayBack() {
+        // The rule fires when the Remote is the destination being selected, from
+        // anywhere. Selecting anything else must never set one, or the drawer's
+        // behaviour would change too.
+        for destination in ShellDestination.allCases {
+            for item in ShellDestination.allCases where item != .remote {
                 XCTAssertNil(destination.returnTarget(whenSelecting: item),
                              "\(item.title) from \(destination.title) should not set a return target")
             }
