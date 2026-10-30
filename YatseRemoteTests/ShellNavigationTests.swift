@@ -171,6 +171,38 @@ final class ShellNavigationTests: XCTestCase {
         XCTAssertNil(LibrarySection.movies.childRequest(for: film))
     }
 
+    // MARK: Remote's way back
+
+    /// The Remote is the only destination reached *from* another one, so it is
+    /// the only one that has to remember where it came from: the jump button on
+    /// every browse screen sends the user here, and the control in its place has
+    /// to send them back to the folder they were in, not to the drawer's idea of
+    /// "Addons".
+    func testOpeningTheRemoteRemembersWhereItWasOpenedFrom() {
+        XCTAssertEqual(ShellDestination.addons.returnTarget(whenSelecting: .remote), .addons)
+        XCTAssertEqual(ShellDestination.files.returnTarget(whenSelecting: .remote), .files)
+        XCTAssertEqual(ShellDestination.movies.returnTarget(whenSelecting: .remote), .movies)
+    }
+
+    func testOnlySelectingTheRemoteSetsAWayBack() {
+        // The rule fires when the Remote is the destination being selected, from
+        // anywhere. Selecting anything else must never set one, or the drawer's
+        // behaviour would change too.
+        for destination in ShellDestination.allCases {
+            for item in ShellDestination.allCases where item != .remote {
+                XCTAssertNil(destination.returnTarget(whenSelecting: item),
+                             "\(item.title) from \(destination.title) should not set a return target")
+            }
+        }
+    }
+
+    func testReselectingTheRemoteKeepsTheEarlierTarget() {
+        // Tapping Remote again while already on it must not wipe where it was
+        // opened from — nil here means the shell leaves the remembered target
+        // alone.
+        XCTAssertNil(ShellDestination.remote.returnTarget(whenSelecting: .remote))
+    }
+
     // MARK: Icons
 
     /// A mistyped SF Symbol name draws nothing while leaving the button

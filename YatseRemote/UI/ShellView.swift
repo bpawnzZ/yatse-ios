@@ -19,6 +19,9 @@ struct ShellView: View {
     @State private var showingNowPlaying = false
     @State private var pushed: [Favorite] = []
     @State private var memory = NavigationMemory()
+    /// Where the Remote was opened from, so it can hand the user back. Only the
+    /// destination is kept — the place inside it is `memory`'s job.
+    @State private var returnTo: ShellDestination?
     /// Where each place was scrolled to. Lives here for the same reason
     /// `memory` does — the screens that read it are destroyed on every
     /// destination change.
@@ -73,7 +76,9 @@ struct ShellView: View {
     private func destinationView(_ model: AppModel) -> some View {
         switch destination {
         case .remote:
-            RemoteScreen(model: model, onOpenDrawer: openDrawer, onSelect: select)
+            RemoteScreen(model: model, onOpenDrawer: openDrawer, onSelect: select,
+                         returnTo: returnTo,
+                         onReturn: { if let target = returnTo { select(target) } })
         case .home:
             HomeScreen(model: model, onOpenDrawer: openDrawer, onSelect: select)
         case .movies, .tvShows, .music:
@@ -158,6 +163,7 @@ struct ShellView: View {
     /// previously reached in the one being opened, rather than clearing the path.
     /// Re-selecting the destination already shown returns it to its own root.
     private func select(_ item: ShellDestination) {
+        if let target = destination.returnTarget(whenSelecting: item) { returnTo = target }
         if item == destination {
             pushed = []
             memory.record([], for: item)

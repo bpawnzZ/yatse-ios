@@ -38,6 +38,11 @@ struct RemoteScreen: View {
     @ObservedObject var model: AppModel
     let onOpenDrawer: () -> Void
     let onSelect: (ShellDestination) -> Void
+    /// Where the user was before jumping here from a browse screen, if anywhere.
+    /// The header shows the way back in its place — a Remote mark on the Remote
+    /// is the one control on this screen that cannot do anything.
+    let returnTo: ShellDestination?
+    let onReturn: () -> Void
 
     @Environment(\.remoteTheme) private var theme
 
@@ -128,8 +133,8 @@ struct RemoteScreen: View {
 
     // MARK: Header
 
-    /// Flat and plain: the hamburger, the title, then power / cast / remote,
-    /// with no circular button backgrounds and no pill container.
+    /// Flat and plain: the hamburger, the title, then power / cast / back-to-where-
+    /// you-were, with no circular button backgrounds and no pill container.
     private var header: some View {
         HStack(spacing: 10) {
             headerButton("line.3.horizontal", label: "Open menu", action: onOpenDrawer)
@@ -143,10 +148,15 @@ struct RemoteScreen: View {
 
             powerMenu
             headerButton("airplayvideo", label: "Cast") { showingCastNotice = true }
-            Image(systemName: "av.remote")
-                .font(.title3)
-                .frame(width: 44, height: 44)
-                .accessibilityLabel("Remote")
+            // Left where the Remote mark was, which was dead weight on its own
+            // screen: this takes the user back to the place they left, folder and
+            // all, because `NavigationMemory` restores it. The mark is the
+            // destination's own, so it says where rather than just "back".
+            if let returnTo {
+                headerButton(returnTo.systemImage,
+                             label: "Back to \(returnTo.title)",
+                             action: onReturn)
+            }
         }
         .foregroundStyle(theme.icon)
     }

@@ -64,6 +64,19 @@ enum ShellDestination: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The destination the Remote was opened from, so the Remote can offer the
+    /// way back to where the user actually was — the add-on folder they were
+    /// browsing, not the top of it: `NavigationMemory` restores that place for
+    /// the destination this returns.
+    ///
+    /// Only the Remote has this, because it is the one destination reached *from*
+    /// another one rather than from the drawer: every browse screen carries the
+    /// jump button. Selecting the Remote while already on it returns nil, so a
+    /// re-selection does not erase where it was opened from.
+    func returnTarget(whenSelecting item: ShellDestination) -> ShellDestination? {
+        item == .remote && self != .remote ? self : nil
+    }
+
     /// The library section this destination opens, if it is a library section.
     var librarySection: LibrarySection? {
         switch self {
