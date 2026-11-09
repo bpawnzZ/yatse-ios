@@ -204,27 +204,36 @@ final class KodiModelTests: XCTestCase {
     /// `image://` scheme and Kodi's trailing slash included — percent-encoded
     /// again as a single path segment; measured on the live box, the stripped and
     /// decoded forms are 404 while this one returned 200 for every library poster
-    /// and all 63 add-on icons. The hosted path therefore decodes back to exactly
-    /// the value Kodi sent.
+    /// and all 63 add-on icons.
     func testArtworkIsServedByTheHostInTheShapeKodiAnswers() throws {
         var host = Host()
         host.address = "10.13.13.7"
         host.port = 8080
 
-        for raw in [
-            "image://%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png/",
-            "image://special%3a%2f%2fhome%2faddons%2fx.png",
-            "image://https%3a%2f%2f10-0-0-129.ea9fa151a2af4395aca7d4191dedd86d.plex.direct"
+        let values = [
+            // An add-on icon: a local path on the box, no route from the device.
+            ("image://%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png/",
+             "image%3A%2F%2F%252fstorage%252f.kodi%252faddons%252fplugin.video.youtube%252ficon.png%2F"),
+            // A library poster: an absolute URL to the media server, which the
+            // phone may not be able to reach at all.
+            ("image://https%3a%2f%2f10-0-0-129.ea9fa151a2af4395aca7d4191dedd86d.plex.direct"
                 + "%3a32400%2fphoto%2f%3a%2ftranscode%3fwidth%3d1920%26url%3d%2flibrary%2fmetadata"
                 + "%2f6210%2fthumb%2f1787853307%26X-Plex-Token%3dabc%2f",
-        ] {
+             "image%3A%2F%2Fhttps%253a%252f%252f10-0-0-129.ea9fa151a2af4395aca7d4191dedd86d.plex.direct"
+                + "%253a32400%252fphoto%252f%253a%252ftranscode%253fwidth%253d1920%2526url%253d"
+                + "%252flibrary%252fmetadata%252f6210%252fthumb%252f1787853307%2526X-Plex-Token"
+                + "%253dabc%252f"),
+        ]
+
+        for (raw, escaped) in values {
             let served = try XCTUnwrap(Artwork.url(raw, host: host), raw)
             XCTAssertEqual(served.scheme, "http")
             XCTAssertEqual(served.host, "10.13.13.7")
             XCTAssertEqual(served.port, 8080)
-            // Decoding the path gives back the value untouched — scheme, query and
-            // Kodi's trailing slash all still there.
-            XCTAssertEqual(served.path, "/image/" + raw)
+            XCTAssertEqual(served.absoluteString, "http://10.13.13.7:8080/image/" + escaped)
+            // The point of the shape: decoding the path gives the value back whole —
+            // `image://`, the query and Kodi's trailing slash all still there.
+            XCTAssertEqual(escaped.removingPercentEncoding, raw)
         }
 
         XCTAssertNil(Artwork.url("", host: host))
@@ -240,7 +249,9 @@ final class KodiModelTests: XCTestCase {
 
         let candidates = Artwork.urls(raw, host: host)
         XCTAssertEqual(candidates.count, 2)
-        XCTAssertEqual(candidates.first?.path, "/image/" + raw)
+        XCTAssertEqual(candidates.first?.absoluteString,
+                       "http://10.13.13.7:8080/image/image%3A%2F%2Fhttp%253a%252f%252f10.0.0.129"
+                       + "%253a32400%252fposter.jpg%2F")
         XCTAssertEqual(candidates.last?.absoluteString, "http://10.0.0.129:32400/poster.jpg")
 
         // Without a host there is only the direct URL.
