@@ -4,7 +4,10 @@ import UIKit
 /// Kodi's webserver protects `/image/...` with the same Basic auth as JSON-RPC,
 /// so `AsyncImage` gets a 401 — the artwork has to be fetched with credentials.
 struct ArtworkImage: View {
-    let url: URL?
+    /// Every candidate for this artwork, in the order to try them — see
+    /// `Artwork.urls(_:host:)`. The list rather than one URL is what makes a
+    /// tile load when the device cannot reach the server the value points at.
+    let urls: [URL]
     let username: String
     let password: String
     var size: CGFloat = 56
@@ -28,37 +31,45 @@ struct ArtworkImage: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .task(id: url) { await load() }
+        .task(id: urls) { await load() }
     }
 
     private func load() async {
-        guard let url else {
+        guard !urls.isEmpty else {
             image = nil
             return
         }
-        image = await ArtworkLoader.load(url, username: username, password: password)
+        image = await ArtworkLoader.load(urls, username: username, password: password)
     }
 }
 
-/// Shared authenticated artwork fetch, used by the row image and the remote's
-/// blurred background so both ride the same cache and the same Basic-auth path.
+/// Shared authenticated artwork fetch, used by every tile, row and backdrop so
+/// they all ride the same cache and the same Basic-auth path.
 enum ArtworkLoader {
-    static func load(_ url: URL, username: String, password: String) async -> UIImage? {
-        if let cached = ArtworkCache.shared.image(for: url) { return cached }
-
-        var request = URLRequest(url: url)
-        if !username.isEmpty || !password.isEmpty {
-            let token = Data("\(username):\(password)".utf8).base64EncodedString()
-            request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
+    /// The first candidate that answers with an image. The host's copy comes
+    /// first (see `Artwork.urls(_:host:)`), so a tile that still ends up blank is
+    /// a genuinely missing image rather than an unreachable media server.
+    static func load(_ urls: [URL], username: String, password: String) async -> UIImage? {
+        for url in urls {
+            if let cached = ArtworkCache.shared.image(for: url) { return cached }
         }
 
-        guard let (data, response) = try? await ArtworkSession.shared.data(for: request),
-              let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode),
-              let image = UIImage(data: data) else { return nil }
+        for url in urls {
+            var request = URLRequest(url: url)
+            if !username.isEmpty || !password.isEmpty {
+                let token = Data("\(username):\(password)".utf8).base64EncodedString()
+                request.setValue("Basic \(token)", forHTTPHeaderField: "Authorization")
+            }
 
-        ArtworkCache.shared.store(image, for: url)
-        return image
+            guard let (data, response) = try? await ArtworkSession.shared.data(for: request),
+                  let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode),
+                  let image = UIImage(data: data) else { continue }
+
+            ArtworkCache.shared.store(image, for: url)
+            return image
+        }
+        return nil
     }
 }
 
@@ -121,7 +132,7 @@ final class ArtworkSession: NSObject, URLSessionDelegate {
 /// `app-shell` requires its backdrop blurred while something plays, and the Now
 /// Playing overlay passes 0 because its own requirement is a sharp artwork.
 struct ArtworkBackground: View {
-    let url: URL?
+    let urls: [URL]
     let username: String
     let password: String
     /// No default, so a new call site has to choose which of the two it wants.
@@ -145,12 +156,12 @@ struct ArtworkBackground: View {
             .overlay(theme.artworkScrim)
             .ignoresSafeArea()
         }
-        .task(id: url) {
-            guard let url else {
+        .task(id: urls) {
+            guard !urls.isEmpty else {
                 image = nil
                 return
             }
-            image = await ArtworkLoader.load(url, username: username, password: password)
+            image = await ArtworkLoader.load(urls, username: username, password: password)
         }
     }
 }
@@ -170,7 +181,7 @@ final class ArtworkCache {
 /// A container-filling artwork image with a 2:3 poster aspect, for grid tiles.
 /// Separate from `ArtworkImage`, whose fixed square contract the rows rely on.
 struct PosterImage: View {
-    let url: URL?
+    let urls: [URL]
     let username: String
     let password: String
 
@@ -189,15 +200,15 @@ struct PosterImage: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 10))
-            .task(id: url) { await load() }
+            .task(id: urls) { await load() }
     }
 
     private func load() async {
-        guard let url else {
+        guard !urls.isEmpty else {
             image = nil
             return
         }
-        image = await ArtworkLoader.load(url, username: username, password: password)
+        image = await ArtworkLoader.load(urls, username: username, password: password)
     }
 }
 
@@ -206,12 +217,15 @@ struct MediaRow: View {
     let item: MediaItem
     let username: String
     let password: String
+    /// The host the row's artwork is fetched through; nil only for a caller that
+    /// has no host, which then gets the direct URL alone.
+    var host: Host? = nil
     var showsChevron = false
 
     var body: some View {
         HStack(spacing: 12) {
             ArtworkImage(
-                url: Artwork.poster(for: item.art, thumbnail: item.thumbnail),
+                urls: Artwork.posterURLs(for: item.art, thumbnail: item.thumbnail, host: host),
                 username: username,
                 password: password
             )
@@ -243,7 +257,7 @@ struct MediaRow: View {
 /// item, built from what a favourite records rather than from a `MediaItem`.
 struct FavoriteRow: View {
     let favorite: Favorite
-    let artURL: URL?
+    let artURLs: [URL]
     let username: String
     let password: String
     /// What the row's second line says. Defaults to the kind of place the
@@ -253,7 +267,7 @@ struct FavoriteRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ArtworkImage(url: artURL, username: username, password: password)
+            ArtworkImage(urls: artURLs, username: username, password: password)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(favorite.title)

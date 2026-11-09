@@ -119,14 +119,14 @@ struct LibraryView: View {
             // (`.id(destination)`) so a closure-built screen is discarded without
             // the shell ever knowing it existed.
             NavigationLink(value: favorite(for: item, target: child.favoriteTarget)) {
-                MediaRow(item: item, username: model.host.username, password: model.password, showsChevron: true)
+                MediaRow(item: item, username: model.host.username, password: model.password, host: model.host, showsChevron: true)
             }
             .contextMenu { FavoriteMenuItem(favorite: favorite(for: item, target: child.favoriteTarget)) }
         } else {
             Button {
                 Task { await play(item) }
             } label: {
-                MediaRow(item: item, username: model.host.username, password: model.password)
+                MediaRow(item: item, username: model.host.username, password: model.password, host: model.host)
             }
             .buttonStyle(.plain)
         }
@@ -136,14 +136,14 @@ struct LibraryView: View {
     private func gridCell(for item: MediaItem) -> some View {
         if let child = section.childRequest(for: item) {
             NavigationLink(value: favorite(for: item, target: child.favoriteTarget)) {
-                PosterTile(item: item, username: model.host.username, password: model.password, mode: mode)
+                PosterTile(item: item, username: model.host.username, password: model.password, mode: mode, host: model.host)
             }
             .contextMenu { FavoriteMenuItem(favorite: favorite(for: item, target: child.favoriteTarget)) }
         } else {
             Button {
                 Task { await play(item) }
             } label: {
-                PosterTile(item: item, username: model.host.username, password: model.password, mode: mode)
+                PosterTile(item: item, username: model.host.username, password: model.password, mode: mode, host: model.host)
             }
             .buttonStyle(.plain)
         }
@@ -216,7 +216,7 @@ struct LibraryView: View {
 /// type, free to drift from this one — which is how the Movies tile once went
 /// blank.
 struct PosterTile: View {
-    let url: URL?
+    let urls: [URL]
     let title: String
     let detail: String
     let username: String
@@ -226,8 +226,8 @@ struct PosterTile: View {
     /// forgets it would silently render full-size tiles in a dense grid.
     let mode: ViewMode
 
-    init(url: URL?, title: String, detail: String, username: String, password: String, mode: ViewMode) {
-        self.url = url
+    init(urls: [URL], title: String, detail: String, username: String, password: String, mode: ViewMode) {
+        self.urls = urls
         self.title = title
         self.detail = detail
         self.username = username
@@ -235,9 +235,11 @@ struct PosterTile: View {
         self.mode = mode
     }
 
-    /// The library grid's tile: artwork and text come from the item.
-    init(item: MediaItem, username: String, password: String, mode: ViewMode) {
-        self.init(url: Artwork.poster(for: item.art, thumbnail: item.thumbnail),
+    /// The library grid's tile: artwork and text come from the item, resolved
+    /// through the host so the poster does not depend on the phone reaching the
+    /// media server behind it.
+    init(item: MediaItem, username: String, password: String, mode: ViewMode, host: Host? = nil) {
+        self.init(urls: Artwork.posterURLs(for: item.art, thumbnail: item.thumbnail, host: host),
                   title: item.heading,
                   detail: item.detailLine,
                   username: username,
@@ -247,7 +249,7 @@ struct PosterTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            PosterImage(url: url, username: username, password: password)
+            PosterImage(urls: urls, username: username, password: password)
             Text(title)
                 .font(mode.usesSmallTileText ? .caption : .subheadline)
                 .lineLimit(2)
@@ -355,7 +357,7 @@ struct FavoritesScreen: View {
             ForEach(favorites.items) { favorite in
                 Button { onOpen(favorite) } label: {
                     FavoriteRow(favorite: favorite,
-                                artURL: favorite.artworkURL(host: model.host),
+                                artURLs: favorite.artworkURLs(host: model.host),
                                 username: model.host.username,
                                 password: model.password)
                 }
@@ -372,7 +374,7 @@ struct FavoritesScreen: View {
     }
 
     private func tile(_ favorite: Favorite) -> some View {
-        PosterTile(url: favorite.artworkURL(host: model.host),
+        PosterTile(urls: favorite.artworkURLs(host: model.host),
                    title: favorite.title,
                    detail: Self.detailLine(for: favorite.target),
                    username: model.host.username,
@@ -462,7 +464,7 @@ struct ChildrenView: View {
                         if let payload = item.playableItem { await model.play(item: payload) }
                     }
                 } label: {
-                    MediaRow(item: item, username: model.host.username, password: model.password)
+                    MediaRow(item: item, username: model.host.username, password: model.password, host: model.host)
                 }
                 .buttonStyle(.plain)
             }
@@ -483,7 +485,8 @@ struct ChildrenView: View {
                         PosterTile(item: item,
                                    username: model.host.username,
                                    password: model.password,
-                                   mode: mode)
+                                   mode: mode,
+                                   host: model.host)
                     }
                     .buttonStyle(.plain)
                 }
@@ -564,7 +567,7 @@ struct FilesScreen: View {
         List {
             ForEach(Array(sources.enumerated()), id: \.offset) { _, source in
                 NavigationLink(value: Favorite(directoryEntry: source)) {
-                    MediaRow(item: source, username: model.host.username, password: model.password, showsChevron: true)
+                    MediaRow(item: source, username: model.host.username, password: model.password, host: model.host, showsChevron: true)
                 }
                 .contextMenu { FavoriteMenuItem(favorite: Favorite(directoryEntry: source)) }
             }
@@ -580,7 +583,8 @@ struct FilesScreen: View {
                         PosterTile(item: source,
                                    username: model.host.username,
                                    password: model.password,
-                                   mode: mode)
+                                   mode: mode,
+                                   host: model.host)
                     }
                     .contextMenu { FavoriteMenuItem(favorite: Favorite(directoryEntry: source)) }
                 }
@@ -659,7 +663,7 @@ struct DirectoryView: View {
             ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                 if item.isDirectory {
                     NavigationLink(value: Favorite(directoryEntry: item)) {
-                        MediaRow(item: item, username: model.host.username, password: model.password, showsChevron: true)
+                        MediaRow(item: item, username: model.host.username, password: model.password, host: model.host, showsChevron: true)
                     }
                     .contextMenu { FavoriteMenuItem(favorite: Favorite(directoryEntry: item)) }
                 } else {
@@ -668,7 +672,7 @@ struct DirectoryView: View {
                             if let payload = item.playableItem { await model.play(item: payload) }
                         }
                     } label: {
-                        MediaRow(item: item, username: model.host.username, password: model.password)
+                        MediaRow(item: item, username: model.host.username, password: model.password, host: model.host)
                     }
                     .buttonStyle(.plain)
                 }
@@ -720,9 +724,9 @@ struct DirectoryView: View {
         }
     }
 
-    /// Add-on artwork needs the host's image endpoint — see `Artwork.url(_:host:)`.
+    /// Artwork is fetched through the host — see `Artwork.urls(_:host:)`.
     private func tile(_ item: MediaItem) -> some View {
-        PosterTile(url: Artwork.poster(for: item.art, thumbnail: item.thumbnail, host: model.host),
+        PosterTile(urls: Artwork.posterURLs(for: item.art, thumbnail: item.thumbnail, host: model.host),
                    title: item.heading,
                    detail: item.detailLine,
                    username: model.host.username,

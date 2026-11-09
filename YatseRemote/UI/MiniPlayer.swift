@@ -49,7 +49,7 @@ struct MiniPlayer: View {
         HStack(spacing: 12) {
             HStack(spacing: 12) {
                 ArtworkImage(
-                    url: Artwork.poster(for: model.item?.art ?? [:], thumbnail: model.item?.thumbnail ?? ""),
+                    urls: Artwork.posterURLs(for: model.item?.art ?? [:], thumbnail: model.item?.thumbnail ?? "", host: model.host),
                     username: model.host.username,
                     password: model.password,
                     size: 40
