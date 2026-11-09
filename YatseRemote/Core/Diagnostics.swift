@@ -87,6 +87,9 @@ struct DiagnosticsContext {
     var reachability: () async throws -> String
     var imageFetch: (_ url: URL) async throws -> Int
     var notificationChannel: (_ timeout: TimeInterval) async throws -> String
+    /// The host the app is connected to, so artwork can be probed the way the
+    /// app fetches it — through the host first, the direct URL second.
+    var host: Host? = nil
 
     func call<T: Decodable>(_ method: String, params: [String: Any] = [:], as type: T.Type) async throws -> T {
         let data = try await callRaw(method, params)
@@ -113,7 +116,8 @@ struct DiagnosticsContext {
             imageFetch: { url in try await client.fetchImage(url) },
             notificationChannel: { timeout in
                 try await client.probeNotificationChannel(timeout: timeout)
-            }
+            },
+            host: client.host
         )
     }
 }
@@ -328,15 +332,22 @@ final class Diagnostics {
                 dependsOn: "library",
                 timeout: rpcTimeout,
                 run: { context in
-                    guard let url = try await Diagnostics.artworkURL(context) else {
+                    let urls = try await Diagnostics.artworkURLs(context)
+                    guard !urls.isEmpty else {
                         return .notRun("No artwork available for the playing or first library item.")
                     }
-                    do {
-                        let bytes = try await context.imageFetch(url)
-                        return .passed("fetched \(bytes) bytes from \(url.absoluteString)")
-                    } catch {
-                        return .failed(Diagnostics.describe(error, method: url.absoluteString, layer: .artwork))
+                    var lastError: Error?
+                    for url in urls {
+                        do {
+                            let bytes = try await context.imageFetch(url)
+                            return .passed("fetched \(bytes) bytes from \(url.absoluteString)")
+                        } catch {
+                            lastError = error
+                        }
                     }
+                    let url = urls[0]
+                    return .failed(Diagnostics.describe(lastError ?? KodiError.malformedResponse,
+                                                       method: url.absoluteString, layer: .artwork))
                 }
             ),
             Probe(
@@ -422,18 +433,20 @@ final class Diagnostics {
         return .passed("JSON-RPC \(version.major).\(version.minor).\(version.patch)")
     }
 
-    /// Poster of the playing item, else of the first library movie; nil when no
-    /// artwork exists anywhere (the caller reports that as `notRun`, never failed).
-    static func artworkURL(_ context: DiagnosticsContext) async throws -> URL? {
+    /// Artwork candidates for the playing item, else the first library movie; empty
+    /// when no artwork exists anywhere (the caller reports that as `notRun`, never
+    /// failed). Built the way the views build them, so the probe measures the same
+    /// URLs the tiles use.
+    static func artworkURLs(_ context: DiagnosticsContext) async throws -> [URL] {
         let players = (try? await context.call("Player.GetActivePlayers", as: [ActivePlayer].self)) ?? []
         if let player = players.first(where: { $0.isVideo }) ?? players.first,
            let item = (try? await context.call(
                "Player.GetItem",
                params: ["playerid": player.playerid, "properties": ["art", "thumbnail"]],
                as: ItemPayload.self
-           ))?.item,
-           let url = Artwork.poster(for: item.art, thumbnail: item.thumbnail) {
-            return url
+           ))?.item {
+            let urls = Artwork.posterURLs(for: item.art, thumbnail: item.thumbnail, host: context.host)
+            if !urls.isEmpty { return urls }
         }
 
         let payload = try await context.call(
@@ -441,11 +454,10 @@ final class Diagnostics {
             params: ["properties": ["art", "thumbnail"], "limits": ["start": 0, "end": 1]],
             as: ListPayload.self
         )
-        if let movie = payload.movies?.first,
-           let url = Artwork.poster(for: movie.art, thumbnail: movie.thumbnail) {
-            return url
+        if let movie = payload.movies?.first {
+            return Artwork.posterURLs(for: movie.art, thumbnail: movie.thumbnail, host: context.host)
         }
-        return nil
+        return []
     }
 
     private func requestDescription(for probe: Probe) -> String {

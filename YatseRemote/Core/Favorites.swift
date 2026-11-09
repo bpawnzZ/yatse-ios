@@ -92,9 +92,9 @@ extension Favorite {
     }
 
     /// The poster for this favourite, resolved against the host it belongs to —
-    /// add-on artwork needs the host's image endpoint, see `Artwork.url(_:host:)`.
-    func artworkURL(host: Host) -> URL? {
-        Artwork.poster(for: art ?? [:], thumbnail: thumbnail ?? "", host: host)
+    /// the host's own image endpoint first, see `Artwork.urls(_:host:)`.
+    func artworkURLs(host: Host) -> [URL] {
+        Artwork.posterURLs(for: art ?? [:], thumbnail: thumbnail ?? "", host: host)
     }
 }
 

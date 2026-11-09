@@ -63,18 +63,21 @@ struct NowPlayingView: View {
 
     @ViewBuilder
     private var backdrop: some View {
-        if let url = backdropURL {
-            ArtworkBackground(url: url, username: model.host.username,
+        if !backdropURLs.isEmpty {
+            ArtworkBackground(urls: backdropURLs, username: model.host.username,
                               password: model.password, blur: 0)
         } else {
             theme.background.ignoresSafeArea()
         }
     }
 
-    private var backdropURL: URL? {
-        guard let item = model.item else { return nil }
-        if !item.fanart.isEmpty, let url = Artwork.url(item.fanart) { return url }
-        return Artwork.poster(for: item.art, thumbnail: item.thumbnail)
+    private var backdropURLs: [URL] {
+        guard let item = model.item else { return [] }
+        if !item.fanart.isEmpty {
+            let fanart = Artwork.urls(item.fanart, host: model.host)
+            if !fanart.isEmpty { return fanart }
+        }
+        return Artwork.posterURLs(for: item.art, thumbnail: item.thumbnail, host: model.host)
     }
 
     // MARK: Header
@@ -432,7 +435,7 @@ struct NowPlayingInfoView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top, spacing: 14) {
                         ArtworkImage(
-                            url: Artwork.poster(for: model.item?.art ?? [:], thumbnail: model.item?.thumbnail ?? ""),
+                            urls: Artwork.posterURLs(for: model.item?.art ?? [:], thumbnail: model.item?.thumbnail ?? "", host: model.host),
                             username: model.host.username,
                             password: model.password,
                             size: 96

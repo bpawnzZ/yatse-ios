@@ -111,7 +111,7 @@ struct AddonsScreen: View {
                 tile(addon)
             } else {
                 FavoriteRow(favorite: Favorite(addon: addon),
-                            artURL: Artwork.url(addon.thumbnail, host: model.host),
+                            artURLs: Artwork.urls(addon.thumbnail, host: model.host),
                             username: model.host.username,
                             password: model.password,
                             detail: detail(for: addon))
@@ -124,7 +124,7 @@ struct AddonsScreen: View {
     }
 
     private func tile(_ addon: Addon) -> some View {
-        PosterTile(url: Artwork.url(addon.thumbnail, host: model.host),
+        PosterTile(urls: Artwork.urls(addon.thumbnail, host: model.host),
                    title: addon.displayName,
                    detail: detail(for: addon),
                    username: model.host.username,

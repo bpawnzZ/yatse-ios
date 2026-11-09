@@ -418,18 +418,21 @@ struct RemoteScreen: View {
 
     @ViewBuilder
     private var artworkBackground: some View {
-        if let url = backgroundArtworkURL {
-            ArtworkBackground(url: url, username: model.host.username,
+        if !backgroundArtworkURLs.isEmpty {
+            ArtworkBackground(urls: backgroundArtworkURLs, username: model.host.username,
                               password: model.password, blur: theme.artworkBlur)
         }
     }
 
-    /// Nil unless a player is really active, so the backdrop follows playback
+    /// Empty unless a player is really active, so the backdrop follows playback
     /// rather than a cached item.
-    private var backgroundArtworkURL: URL? {
-        guard model.activePlayer != nil, let item = model.item else { return nil }
-        if !item.fanart.isEmpty, let url = Artwork.url(item.fanart) { return url }
-        return Artwork.poster(for: item.art, thumbnail: item.thumbnail)
+    private var backgroundArtworkURLs: [URL] {
+        guard model.activePlayer != nil, let item = model.item else { return [] }
+        if !item.fanart.isEmpty {
+            let fanart = Artwork.urls(item.fanart, host: model.host)
+            if !fanart.isEmpty { return fanart }
+        }
+        return Artwork.posterURLs(for: item.art, thumbnail: item.thumbnail, host: model.host)
     }
 
     private func activate(_ shortcut: RemoteShortcut) {
@@ -479,7 +482,7 @@ struct QueueSheet: View {
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
                                 .frame(width: 24, alignment: .trailing)
-                            MediaRow(item: entry, username: model.host.username, password: model.password)
+                            MediaRow(item: entry, username: model.host.username, password: model.password, host: model.host)
                         }
                     }
                     .buttonStyle(.plain)

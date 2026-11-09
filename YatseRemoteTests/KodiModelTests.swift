@@ -198,62 +198,61 @@ final class KodiModelTests: XCTestCase {
         XCTAssertNil(Artwork.poster(for: [:], thumbnail: ""))
     }
 
-    /// Add-on and plugin art decodes to something the device has no route to — a
-    /// local file path or a `special://` value — so it is served by the host's own
-    /// image endpoint, with the value Kodi sent passed through as it arrived.
-    /// Only library art, which is an absolute URL to the media server, goes direct.
-    func testAddonArtworkIsServedByTheHostAndLibraryArtworkIsNot() throws {
+    /// Every artwork value is served by the host's own image endpoint first,
+    /// because that is the server the app is already connected to and it holds
+    /// the rendered image. The one shape that answers is the **whole** value —
+    /// `image://` scheme and Kodi's trailing slash included — percent-encoded
+    /// again as a single path segment; measured on the live box, the stripped and
+    /// decoded forms are 404 while this one returned 200 for every library poster
+    /// and all 63 add-on icons. The hosted path therefore decodes back to exactly
+    /// the value Kodi sent.
+    func testArtworkIsServedByTheHostInTheShapeKodiAnswers() throws {
         var host = Host()
         host.address = "10.13.13.7"
         host.port = 8080
 
-        let icon = try XCTUnwrap(Artwork.url(
-            "image://%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png", host: host))
-        XCTAssertEqual(icon.scheme, "http")
-        XCTAssertEqual(icon.host, "10.13.13.7")
-        XCTAssertEqual(icon.port, 8080)
-        XCTAssertEqual(icon.absoluteString,
-                       "http://10.13.13.7:8080/image/%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png")
-
-        XCTAssertEqual(
-            Artwork.url("image://special%3a%2f%2fhome%2faddons%2fx.png", host: host)?.absoluteString,
-            "http://10.13.13.7:8080/image/special%3a%2f%2fhome%2faddons%2fx.png"
-        )
-
-        // Library art is already absolute; it is not routed through the host.
-        XCTAssertEqual(
-            Artwork.url("image://http%3a%2f%2f10.13.13.2%3a8096%2fposter.jpg/", host: host)?
-                .absoluteString,
-            "http://10.13.13.2:8096/poster.jpg"
-        )
+        for raw in [
+            "image://%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png/",
+            "image://special%3a%2f%2fhome%2faddons%2fx.png",
+            "image://https%3a%2f%2f10-0-0-129.ea9fa151a2af4395aca7d4191dedd86d.plex.direct"
+                + "%3a32400%2fphoto%2f%3a%2ftranscode%3fwidth%3d1920%26url%3d%2flibrary%2fmetadata"
+                + "%2f6210%2fthumb%2f1787853307%26X-Plex-Token%3dabc%2f",
+        ] {
+            let served = try XCTUnwrap(Artwork.url(raw, host: host), raw)
+            XCTAssertEqual(served.scheme, "http")
+            XCTAssertEqual(served.host, "10.13.13.7")
+            XCTAssertEqual(served.port, 8080)
+            // Decoding the path gives back the value untouched — scheme, query and
+            // Kodi's trailing slash all still there.
+            XCTAssertEqual(served.path, "/image/" + raw)
+        }
 
         XCTAssertNil(Artwork.url("", host: host))
     }
 
-    /// The value Kodi actually sends carries Kodi's own trailing slash, and the
-    /// image endpoint answers **404** for that shape — measured on the live box:
-    /// `/image/%2f…icon.png/` is 404, `/image/%2f…icon.png` is the real PNG.
-    /// `ArtworkLoader` draws the placeholder on any non-2xx, so this one slash
-    /// is what blanked every add-on tile.
-    func testAddonArtworkTrimsKodisTrailingSlash() {
+    /// The direct URL stays as the second candidate: it is what loads a public
+    /// poster the host has never cached (a plugin folder's `i.ytimg.com` thumbs).
+    func testArtworkCandidatesAreTheHostThenTheDirectURL() {
         var host = Host()
         host.address = "10.13.13.7"
         host.port = 8080
+        let raw = "image://http%3a%2f%2f10.0.0.129%3a32400%2fposter.jpg/"
 
-        let served = "http://10.13.13.7:8080/image/%2fstorage%2f.kodi%2faddons"
-            + "%2fplugin.video.youtube%2ficon.png"
-        let raw = "image://%2fstorage%2f.kodi%2faddons%2fplugin.video.youtube%2ficon.png/"
+        let candidates = Artwork.urls(raw, host: host)
+        XCTAssertEqual(candidates.count, 2)
+        XCTAssertEqual(candidates.first?.path, "/image/" + raw)
+        XCTAssertEqual(candidates.last?.absoluteString, "http://10.0.0.129:32400/poster.jpg")
 
-        XCTAssertEqual(Artwork.url(raw, host: host)?.absoluteString, served)
+        // Without a host there is only the direct URL.
+        XCTAssertEqual(Artwork.urls(raw, host: nil).map(\.absoluteString),
+                       ["http://10.0.0.129:32400/poster.jpg"])
 
-        // Kodi's doubled slash is malformed but harmless to normalise.
-        XCTAssertEqual(Artwork.url(raw + "/", host: host)?.absoluteString, served)
+        // Nothing to fetch at all.
+        XCTAssertTrue(Artwork.urls("", host: host).isEmpty)
 
-        // The grids go through the poster overload, so it has to agree.
-        XCTAssertEqual(
-            Artwork.poster(for: ["thumb": raw], thumbnail: "", host: host)?.absoluteString,
-            served
-        )
+        // The poster overload agrees, and keeps preferring the explicit art key.
+        let art = ["poster": raw, "icon": "image://DefaultVideo.png/"]
+        XCTAssertEqual(Artwork.posterURLs(for: art, thumbnail: "", host: host), candidates)
     }
 
     // MARK: Host

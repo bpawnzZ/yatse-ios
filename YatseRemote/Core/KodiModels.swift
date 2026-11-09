@@ -474,43 +474,56 @@ enum Artwork {
         return url(thumbnail)
     }
 
-    /// Artwork the device cannot fetch by itself, served by the host instead.
+    /// The same value, served by the connected host's own image endpoint.
     ///
-    /// Only library art decodes to an absolute `http(s)` URL — the media server's
-    /// own address — so it is fetched directly, as before. Add-on and plugin art
-    /// decodes to something the device has no route to: a local filesystem path
-    /// (`/storage/.kodi/addons/<id>/icon.png`) or a `special://` value. Those are
-    /// handed to Kodi's own image endpoint, which can resolve them. The value Kodi
-    /// returned is already percent-encoded for exactly that request, so it is
-    /// passed through rather than decoded and re-encoded.
+    /// One shape works for every value Kodi hands out, measured on the live box:
+    /// **the whole value — `image://` scheme and Kodi's trailing slash included —
+    /// percent-encoded a second time as one path segment.**
+    /// `/image/image%3A%2F%2Fhttps%253a%252f…` is the cached JPEG (200, 22,662 B);
+    /// `/image/https%3a%2f%2f…` (scheme stripped, decoded) and
+    /// `/image/image://https%3a…` are both **404**. The same double-encoded form
+    /// answered 200 for all 63 add-on icons and every library poster, which is
+    /// why it is the one rule rather than a per-shape special case.
+    ///
+    /// This is the route that does not depend on the *device* being able to reach
+    /// the server behind the artwork: library art points at the Plex/Jellyfin
+    /// address and add-on art points at a path the phone has no route to at all.
+    /// Ceiling: the host serves out of its texture cache, so an image Kodi has
+    /// never rendered is a 404 here — `urls(_:host:)` keeps the direct URL for
+    /// exactly that case.
     static func url(_ raw: String, host: Host) -> URL? {
-        guard !raw.isEmpty else { return nil }
-        if let direct = url(raw), let scheme = direct.scheme, scheme.hasPrefix("http") {
-            return direct
-        }
-        guard var components = host.rpcURL.flatMap({
-            URLComponents(url: $0, resolvingAgainstBaseURL: false)
-        }) else { return nil }
+        // The same character set the measured request used: everything except
+        // the RFC 3986 unreserved characters is escaped.
+        let unreserved = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+        guard !raw.isEmpty,
+              let encoded = raw.addingPercentEncoding(withAllowedCharacters: unreserved),
+              var components = host.rpcURL.flatMap({
+                  URLComponents(url: $0, resolvingAgainstBaseURL: false)
+              }) else { return nil }
 
-        var value = raw
-        if value.hasPrefix("image://") { value = String(value.dropFirst("image://".count)) }
-        // Kodi's `image://` grammar keeps a trailing slash on the value
-        // (`image://%2fstorage%2f…%2ficon.png/`) and the image endpoint answers
-        // **404** for it — measured, both with and without the scheme — while the
-        // same path without it is the real PNG. Nothing else may strip it:
-        // `AddonsScreen`, `DirectoryView` and favourites all end up here.
-        while value.hasSuffix("/") { value.removeLast() }
-        components.percentEncodedPath = "/image/" + value
+        components.percentEncodedPath = "/image/" + encoded
         components.query = nil
         components.fragment = nil
         return components.url
     }
 
+    /// Every URL to try for one artwork value, in order: the host's copy first,
+    /// then whatever the device could fetch by itself.
+    static func urls(_ raw: String, host: Host?) -> [URL] {
+        var candidates: [URL] = []
+        if let host, let served = url(raw, host: host) { candidates.append(served) }
+        if let direct = url(raw), !candidates.contains(direct) { candidates.append(direct) }
+        return candidates
+    }
+
     /// Best available poster for a row that may carry add-on or plugin artwork.
-    static func poster(for art: [String: String], thumbnail: String, host: Host) -> URL? {
+    static func posterURLs(for art: [String: String], thumbnail: String, host: Host?) -> [URL] {
         for key in ["poster", "thumb", "cover", "fanart", "banner", "icon"] {
-            if let raw = art[key], let url = url(raw, host: host) { return url }
+            if let raw = art[key] {
+                let candidates = urls(raw, host: host)
+                if !candidates.isEmpty { return candidates }
+            }
         }
-        return url(thumbnail, host: host)
+        return urls(thumbnail, host: host)
     }
 }
